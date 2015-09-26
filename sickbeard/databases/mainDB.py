@@ -1094,3 +1094,12 @@ class AlterTVShowsFieldTypes(AddDefaultEpStatusToTvShows):
         self.connection.action("DROP TABLE tmp_tv_shows")
 
         self.incDBVersion()
+
+class TraktSync(AlterTVShowsFieldTypes):
+    def test(self):
+        return self.hasTable("trakt_data")
+
+    def execute(self):
+        self.connection.action("CREATE TABLE trakt_data (indexer INTEGER, indexer_id INTEGER, next_season INTEGER, next_episode INTEGER, last_updated INTEGER);")
+        self.connection.action("ALTER TABLE tv_episodes ADD COLUMN last_watched INTEGER;")
+        self.connection.action("CREATE view v_episodes_to_watch AS SELECT sh.indexer, sh.indexer_id, e1.season, e1.episode FROM tv_episodes e1 JOIN tv_shows sh on (e1.indexer = sh.indexer AND e1.showid = sh.indexer_id) WHERE ( season = (SELECT season FROM tv_episodes e2 WHERE e2.showid = e1.showid AND e2.last_watched IS NOT NULL ORDER BY e2.season DESC, e2.episode DESC LIMIT 1) AND episode > (SELECT episode FROM tv_episodes e2 WHERE e2.showid = e1.showid AND e2.last_watched IS NOT NULL ORDER BY e2.season DESC, e2.episode DESC LIMIT 1) ) OR ( season > (SELECT season FROM tv_episodes e2 WHERE e2.showid = e1.showid AND e2.last_watched IS NOT NULL ORDER BY e2.season DESC, e2.episode DESC LIMIT 1) ) OR ( e1.season > 0 AND 0 = (SELECT Count(*) FROM tv_episodes e2 WHERE e2.showid = e1.showid AND e2.last_watched IS NOT NULL) ) ORDER BY showid ASC, season ASC, episode ASC;")
