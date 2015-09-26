@@ -604,19 +604,22 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                 # If this is a torrent all we can do is leech the entire torrent, user will have to select which eps not do download in his torrent client
                 else:
 
-                    # Season result from Torrent Provider must be a full-season torrent, creating multi-ep result for it.
-                    logger.log(
-                        u"Adding multi-ep result for full-season torrent. Set the episodes you don't want to 'don't download' in your torrent client if desired!")
-                    epObjs = []
-                    for curEpNum in allEps:
-                        for season in set([x.season for x in episodes]):
-                            epObjs.append(show.getEpisode(season, curEpNum))
-                    bestSeasonResult.episodes = epObjs
+                    if allWanted:
+                        # Season result from Torrent Provider must be a full-season torrent, creating multi-ep result for it.
+                        logger.log(
+                            u"Adding multi-ep result for full-season torrent. Set the episodes you don't want to 'don't download' in your torrent client if desired!")
+                        epObjs = []
+                        for curEpNum in allEps:
+                            for season in set([x.season for x in episodes]):
+                                epObjs.append(show.getEpisode(season, curEpNum))
+                        bestSeasonResult.episodes = epObjs
 
-                    if MULTI_EP_RESULT in foundResults[curProvider.name]:
-                        foundResults[curProvider.name][MULTI_EP_RESULT].append(bestSeasonResult)
+                        if MULTI_EP_RESULT in foundResults[curProvider.name]:
+                            foundResults[curProvider.name][MULTI_EP_RESULT].append(bestSeasonResult)
+                        else:
+                            foundResults[curProvider.name][MULTI_EP_RESULT] = [bestSeasonResult]
                     else:
-                        foundResults[curProvider.name][MULTI_EP_RESULT] = [bestSeasonResult]
+                        logger.log(u"Discarded multi-ep torrent since we don't need every episode of the season.")
 
         # go through multi-ep results and see if we really want them or not, get rid of the rest
         multiResults = {}
