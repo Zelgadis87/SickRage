@@ -197,7 +197,7 @@ class SickRage(object):
             # pylint: disable=W0612
             opts, args = getopt.getopt(sys.argv[1:], "hqdp::",
                                        ['help', 'quiet', 'nolaunch', 'daemon', 'pidfile=', 'port=',
-                                        'datadir=', 'config=', 'noresize'])  # @UnusedVariable
+                                        'datadir=', 'config=', 'noresize', 'locale='])  # @UnusedVariable
         except getopt.GetoptError:
             sys.exit(self.help_message())
 
@@ -253,6 +253,10 @@ class SickRage(object):
             # Prevent resizing of the banner/posters even if PIL is installed
             if o in ('--noresize',):
                 sickbeard.NO_RESIZE = True
+
+            if o in ('--locale',):
+                # set the given locale for the time settings.
+                locale.setlocale(locale.LC_TIME, str(a))
 
         # The pidfile is only useful in daemon mode, make sure we can write the file properly
         if self.CREATEPID:
