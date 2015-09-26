@@ -95,6 +95,10 @@ class TraktChecker():
             except Exception:
                 logger.log(traceback.format_exc(), logger.DEBUG)
 
+        # check if the user has watched any episode
+        if sickbeard.TRAKT_SYNC_WATCHED:
+            self.updateWatchedData()
+
         self.amActive = False
 
     def findShow(self, indexer, indexerid):
