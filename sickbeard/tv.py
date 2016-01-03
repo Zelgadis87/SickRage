@@ -115,6 +115,7 @@ class TVShow(object):
         self.episodes = {}
         self.nextaired = ""
         self.release_groups = None
+        self.added_date = 0
 
         otherShow = helpers.findCertainShow(sickbeard.showList, self.indexerid)
         if otherShow != None:
@@ -806,6 +807,7 @@ class TVShow(object):
             self.flatten_folders = int(sqlResults[0]["flatten_folders"] or 0)
             self.stay_ahead = int(sqlResults[0]["stay_ahead"] or 0)
             self.paused = int(sqlResults[0]["paused"] or 0)
+            self.added_date = int(sqlResults[0]['added_date'] or 0)
 
             try:
                 self.location = sqlResults[0]["location"]
@@ -1177,7 +1179,9 @@ class TVShow(object):
                         "last_update_indexer": self.last_update_indexer,
                         "rls_ignore_words": self.rls_ignore_words,
                         "rls_require_words": self.rls_require_words,
-                        "default_ep_status": self.default_ep_status}
+                        "default_ep_status": self.default_ep_status,
+                        "added_date": self.added_date
+        }
 
         myDB = db.DBConnection()
         myDB.upsert("tv_shows", newValueDict, controlValueDict)
