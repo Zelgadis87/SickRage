@@ -113,6 +113,15 @@
                         </div>
 
                         <div class="field-pair">
+                            <label for="stay_ahead">
+                                <span class="component-title">Auto download new episodes</span>
+                                <span class="component-desc">
+                                    <input type="number" min="0" id="stay_ahead" name="stay_ahead" value="${show.stay_ahead}" />
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="field-pair">
                             <label for="paused">
                                 <span class="component-title">Paused</span>
                                 <span class="component-desc">

@@ -1679,6 +1679,16 @@
                                     <span class="component-desc">Name(slug) of List on Trakt for blacklisting show on 'Add Trending Show' & 'Add Recommended Shows' pages</span>
                                 </label>
                             </div>
+                            <div class="field-pair">
+                                <label for="trakt_sync_watched">
+                                    <span class="component-title">Synchronize watched episodes</span>
+                                    <span class="component-desc">
+                                        <input type="checkbox" name="trakt_sync_watched" id="trakt_sync_watched" ${('', 'checked="checked"')[bool(sickbeard.TRAKT_SYNC_WATCHED)]}/>
+                                        <p>periodically check which episodes you have watched.</p>
+                                    </span>
+                                </label>
+                            </div>
+
                             <div class="testNotification" id="testTrakt-result">Click below to test.</div>
                             <input type="button" class="btn" value="Test Trakt" id="testTrakt" />
                             <input type="submit" class="btn config_submitter" value="Save Changes" />
