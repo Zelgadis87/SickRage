@@ -415,7 +415,7 @@ class WebRoot(WebHandler):
     @staticmethod
     def setPosterSortBy(sort):
 
-        if sort not in ('name', 'date', 'network', 'progress'):
+        if sort not in ('name', 'date', 'network', 'progress', 'added'):
             sort = 'name'
 
         sickbeard.POSTER_SORTBY = sort
