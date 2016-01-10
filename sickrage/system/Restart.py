@@ -1,7 +1,8 @@
+# coding=utf-8
 # This file is part of SickRage.
 #
-# URL: https://www.sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # SickRage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +22,7 @@ import sickbeard
 from sickbeard.event_queue import Events
 
 
-class Restart:
+class Restart(object):
     def __init__(self):
         pass
 

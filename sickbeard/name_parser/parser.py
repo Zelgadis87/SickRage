@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -16,7 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-
 import os
 import time
 import re
@@ -25,6 +26,7 @@ import regexes
 import sickbeard
 
 from sickbeard import logger, helpers, scene_numbering, common, scene_exceptions, db
+from sickrage.helper.common import remove_extension
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
 from dateutil import parser
@@ -35,7 +37,7 @@ class NameParser(object):
     NORMAL_REGEX = 1
     ANIME_REGEX = 2
 
-    def __init__(self, file_name=True, showObj=None, tryIndexers=False, naming_pattern=False):
+    def __init__(self, file_name=True, showObj=None, tryIndexers=False, naming_pattern=False, parse_method=None):
 
         self.file_name = file_name
         self.showObj = showObj
@@ -43,9 +45,9 @@ class NameParser(object):
 
         self.naming_pattern = naming_pattern
 
-        if self.showObj and not self.showObj.is_anime:
+        if (self.showObj and not self.showObj.is_anime) or parse_method == 'normal':
             self._compile_regexes(self.NORMAL_REGEX)
-        elif self.showObj and self.showObj.is_anime:
+        elif (self.showObj and self.showObj.is_anime) or parse_method == 'anime':
             self._compile_regexes(self.ANIME_REGEX)
         else:
             self._compile_regexes(self.ALL_REGEX)
@@ -78,7 +80,7 @@ class NameParser(object):
     def _compile_regexes(self, regexMode):
         if regexMode == self.ANIME_REGEX:
             dbg_str = u"ANIME"
-            uncompiled_regex = [regexes.anime_regexes, regexes.normal_regexes]
+            uncompiled_regex = [regexes.anime_regexes]
         elif regexMode == self.NORMAL_REGEX:
             dbg_str = u"NORMAL"
             uncompiled_regex = [regexes.normal_regexes]
@@ -243,7 +245,7 @@ class NameParser(object):
                     except sickbeard.indexer_episodenotfound:
                         logger.log(u"Unable to find episode with date " + str(bestResult.air_date) + " for show " + bestResult.show.name + ", skipping", logger.WARNING)
                         episode_numbers = []
-                    except sickbeard.indexer_error, e:
+                    except sickbeard.indexer_error as e:
                         logger.log(u"Unable to contact " + sickbeard.indexerApi(bestResult.show.indexer).name + ": " + ex(e), logger.WARNING)
                         episode_numbers = []
 
@@ -346,7 +348,7 @@ class NameParser(object):
         b = getattr(second, attr)
 
         # if a is good use it
-        if a != None or (isinstance(a, list) and a):
+        if a is not None or (isinstance(a, list) and a):
             return a
         # if not use b (if b isn't set it'll just be default)
         else:
@@ -408,7 +410,7 @@ class NameParser(object):
         dir_name, file_name = ek(os.path.split, name)
 
         if self.file_name:
-            base_file_name = helpers.remove_extension(file_name)
+            base_file_name = remove_extension(file_name)
         else:
             base_file_name = file_name
 
@@ -419,7 +421,7 @@ class NameParser(object):
         file_name_result = self._parse_string(base_file_name)
 
         # use only the direct parent dir
-        dir_name = os.path.basename(dir_name)
+        dir_name = ek(os.path.basename, dir_name)
 
         # parse the dirname for extra info if needed
         dir_name_result = self._parse_string(dir_name)
@@ -459,7 +461,7 @@ class NameParser(object):
                 "Unable to parse " + name.encode(sickbeard.SYS_ENCODING, 'xmlcharrefreplace'))
 
         # if there's no useful info in it then raise an exception
-        if final_result.season_number == None and not final_result.episode_numbers and final_result.air_date == None and not final_result.ab_episode_numbers and not final_result.series_name:
+        if final_result.season_number is None and not final_result.episode_numbers and final_result.air_date is None and not final_result.ab_episode_numbers and not final_result.series_name:
             raise InvalidNameException("Unable to parse " + name.encode(sickbeard.SYS_ENCODING, 'xmlcharrefreplace'))
 
         if cache_result:
@@ -483,7 +485,7 @@ class ParseResult(object):
                  score=None,
                  quality=None,
                  version=None
-                ):
+                 ):
 
         self.original_name = original_name
 
@@ -545,11 +547,11 @@ class ParseResult(object):
         return True
 
     def __str__(self):
-        if self.series_name != None:
+        if self.series_name is not None:
             to_return = self.series_name + u' - '
         else:
             to_return = u''
-        if self.season_number != None:
+        if self.season_number is not None:
             to_return += 'S' + str(self.season_number).zfill(2)
         if self.episode_numbers and len(self.episode_numbers):
             for e in self.episode_numbers:
@@ -595,7 +597,7 @@ class NameParserCache(object):
 
     def get(self, name):
         if name in self._previous_parsed:
-            logger.log("Using cached parse result for: " + name, logger.DEBUG)
+            logger.log(u"Using cached parse result for: " + name, logger.DEBUG)
             return self._previous_parsed[name]
 
 
@@ -603,8 +605,8 @@ name_parser_cache = NameParserCache()
 
 
 class InvalidNameException(Exception):
-    "The given release name is not valid"
+    """The given release name is not valid"""
 
 
 class InvalidShowException(Exception):
-    "The given show name is not valid"
+    """The given show name is not valid"""

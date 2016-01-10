@@ -7,20 +7,18 @@
     from sickbeard import subtitles, sbdatetime, network_timezones
     import sickbeard.helpers
 
-    from sickbeard.common import SKIPPED, WANTED, UNAIRED, ARCHIVED, IGNORED, SNATCHED, SNATCHED_PROPER, SNATCHED_BEST, FAILED
+    from sickbeard.common import SKIPPED, WANTED, UNAIRED, ARCHIVED, IGNORED, FAILED, DOWNLOADED
     from sickbeard.common import Quality, qualityPresets, statusStrings, Overview
-
     from sickbeard.helpers import anon_url
+    from sickrage.helper.common import pretty_file_size
 %>
 <%block name="scripts">
 <script type="text/javascript" src="${srRoot}/js/lib/jquery.bookmarkscroll.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/displayShow.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/plotTooltip.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/sceneExceptionsTooltip.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/ratingTooltip.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/ajaxEpSearch.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/ajaxEpSubtitles.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/new/displayShow.js"></script>
 </%block>
 <%block name="content">
 <%namespace file="/inc_defs.mako" import="renderQualityPill"/>
@@ -115,7 +113,7 @@
 
             <div id="showinfo">
 % if 'rating' in show.imdb_info:
-    <% rating_tip = str(show.imdb_info['rating']) + " / 10" + " Stars" + "<br />" + str(show.imdb_info['votes']) + " Votes" %>
+    <% rating_tip = str(show.imdb_info['rating']) + " / 10" + " Stars" + "<br>" + str(show.imdb_info['votes']) + " Votes" %>
     <span class="imdbstars" qtip-content="${rating_tip}">${show.imdb_info['rating']}</span>
 % endif
 
@@ -128,9 +126,12 @@
                 <img src="${srRoot}/images/blank.png" class="country-flag flag-${country}" width="16" height="11" style="margin-left: 3px; vertical-align:middle;" />
         % endfor
     % endif
-    % if 'year' in show.imdb_info:
-                <span>(${show.imdb_info['year']}) - ${show.imdb_info['runtimes']} minutes - </span>
+    <span>
+    % if 'year' in show.imdb_info and show.imdb_info['year']:
+                (${show.imdb_info['year']}) -
     % endif
+                ${show.imdb_info['runtimes']} minutes</span>
+
                 <a href="${anon_url('http://www.imdb.com/title/', _show.imdbid)}" rel="noreferrer" onclick="window.open(this.href, '_blank'); return false;" title="http://www.imdb.com/title/${show.imdbid}"><img alt="[imdb]" height="16" width="16" src="${srRoot}/images/imdb.png" style="margin-top: -1px; vertical-align:middle;"/></a>
 % endif
                 <a href="${anon_url(sickbeard.indexerApi(_show.indexer).config['show_url'], _show.indexerid)}" onclick="window.open(this.href, '_blank'); return false;" title="${sickbeard.indexerApi(show.indexer).config["show_url"] + str(show.indexerid)}"><img alt="${sickbeard.indexerApi(show.indexer).name}" height="16" width="16" src="${srRoot}/images/${sickbeard.indexerApi(show.indexer).config["icon"]}" style="margin-top: -1px; vertical-align:middle;"/></a>
@@ -141,14 +142,13 @@
 
             <div id="tags">
                 <ul class="tags">
-                    % if not show.imdbid and show.genre:
+                    % if ('genres' not in show.imdb_info or not show.imdb_info['genres']) and show.genre:
                         % for genre in show.genre[1:-1].split('|'):
                             <a href="${anon_url('http://trakt.tv/shows/popular/?genres=', genre.lower())}" target="_blank" title="View other popular ${genre} shows on trakt.tv."><li>${genre}</li></a>
                         % endfor
-                    % endif
-                    % if 'year' in show.imdb_info:
+                    % elif 'genres' in show.imdb_info and show.imdb_info['genres']:
                         % for imdbgenre in show.imdb_info['genres'].replace('Sci-Fi','Science-Fiction').split('|'):
-                            <a href="${anon_url('http://trakt.tv/shows/popular/?genres=', imdbgenre.lower())}" target="_blank" title="View other popular ${imdbgenre} shows on trakt.tv."><li>${imdbgenre}</li></a>
+                            <a href="${anon_url('http://www.imdb.com/search/title?count=100&title_type=tv_series&genres=', imdbgenre.lower())}" target="_blank" title="View other popular ${imdbgenre} shows on IMDB."><li>${imdbgenre}</li></a>
                         % endfor
                     % endif
                 </ul>
@@ -162,7 +162,7 @@
                     ${renderQualityPill(show.quality)}
                 % else:
                 % if anyQualities:
-                    <i>Allowed:</i> ${", ".join([capture(renderQualityPill, x) for x in sorted(anyQualities)])}${("", "</br>")[bool(bestQualities)]}
+                    <i>Allowed:</i> ${", ".join([capture(renderQualityPill, x) for x in sorted(anyQualities)])}${("", "<br>")[bool(bestQualities)]}
                 % endif
                 % if bestQualities:
                     <i>Preferred:</i> ${", ".join([capture(renderQualityPill, x) for x in sorted(bestQualities)])}
@@ -204,12 +204,12 @@
                     </tr>
                 % endif
 
-                <tr><td class="showLegend">Size:</td><td>${sickbeard.helpers.pretty_filesize(sickbeard.helpers.get_size(showLoc[0]))}</td></tr>
+                <tr><td class="showLegend">Size:</td><td>${pretty_file_size(sickbeard.helpers.get_size(showLoc[0]))}</td></tr>
 
                 </table>
 
                 <table style="width:180px; float: right; vertical-align: middle; height: 100%;">
-                    <% info_flag = subtitles.fromietf(show.lang).opensubtitles if show.lang else '' %>
+                    <% info_flag = subtitles.code_from_code(show.lang) if show.lang else '' %>
                     <tr><td class="showLegend">Info Language:</td><td><img src="${srRoot}/images/subtitles/flags/${info_flag}.png" width="16" height="11" alt="${show.lang}" title="${show.lang}" onError="this.onerror=null;this.src='${srRoot}/images/flags/unknown.png';"/></td></tr>
                     % if sickbeard.USE_SUBTITLES:
                     <tr><td class="showLegend">Subtitles: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.subtitles)]}" alt="${("N", "Y")[bool(show.subtitles)]}" width="16" height="16" /></td></tr>
@@ -221,7 +221,7 @@
                     <tr><td class="showLegend">Anime: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.is_anime)]}" alt="${("N", "Y")[bool(show.is_anime)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">DVD Order: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.dvdorder)]}" alt="${("N", "Y")[bool(show.dvdorder)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">Scene Numbering: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.scene)]}" alt="${("N", "Y")[bool(show.scene)]}" width="16" height="16" /></td></tr>
-                    <tr><td class="showLegend">Archive First Match: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.archive_firstmatch)]}" alt="${("N", "Y")[bool(show.archive_firstmatch)]}" width="16" height="16" /></td></tr>
+                    <tr><td class="showLegend">Stay Ahead: </td><td>${("Disabled", str(show.stay_ahead) + " ep")[bool(show.stay_ahead > 0)]}</td></tr>
                 </table>
             </div>
         </div>
@@ -230,13 +230,13 @@
     <div class="clearfix"></div>
 
     <div class="pull-left" >
-        Change selected episodes to:</br>
+        Change selected episodes to:<br>
         <select id="statusSelect" class="form-control form-control-inline input-sm">
         <% availableStatus = [WANTED, SKIPPED, IGNORED, FAILED] %>
         % if not sickbeard.USE_FAILED_DOWNLOADS:
         <% availableStatus.remove(FAILED) %>
         % endif
-        % for curStatus in availableStatus + sorted(Quality.DOWNLOADED) + sorted(Quality.ARCHIVED):
+        % for curStatus in availableStatus + Quality.DOWNLOADED + Quality.ARCHIVED:
             % if curStatus not in [DOWNLOADED, ARCHIVED]:
             <option value="${curStatus}">${statusStrings[curStatus]}</option>
             % endif
@@ -247,15 +247,16 @@
         <input class="btn btn-inline" type="button" id="changeStatus" value="Go" />
     </div>
 
-    </br>
+    <br>
 
     <div class="pull-right clearfix" id="checkboxControls">
         <div style="padding-bottom: 5px;">
-            <label for="wanted"><span class="wanted"><input type="checkbox" id="wanted"checked="checked" /> Wanted: <b>${epCounts[Overview.WANTED]}</b></span></label>
-            <label for="qual"><span class="qual"><input type="checkbox" id="qual"checked="checked" /> Low Quality: <b>${epCounts[Overview.QUAL]}</b></span></label>
-            <label for="good"><span class="good"><input type="checkbox" id="good"checked="checked" /> Downloaded: <b>${epCounts[Overview.GOOD]}</b></span></label>
-            <label for="skipped"><span class="skipped"><input type="checkbox" id="skipped"checked="checked" /> Skipped: <b>${epCounts[Overview.SKIPPED]}</b></span></label>
-            <label for="snatched"><span class="snatched"><input type="checkbox" id="snatched"checked="checked" /> Snatched: <b>${epCounts[Overview.SNATCHED]}</b></span></label>
+            <% total_snatched = epCounts[Overview.SNATCHED] + epCounts[Overview.SNATCHED_PROPER] + epCounts[Overview.SNATCHED_BEST] %>
+            <label for="wanted"><span class="wanted"><input type="checkbox" id="wanted" checked="checked" /> Wanted: <b>${epCounts[Overview.WANTED]}</b></span></label>
+            <label for="qual"><span class="qual"><input type="checkbox" id="qual" checked="checked" /> Low Quality: <b>${epCounts[Overview.QUAL]}</b></span></label>
+            <label for="good"><span class="good"><input type="checkbox" id="good" checked="checked" /> Downloaded: <b>${epCounts[Overview.GOOD]}</b></span></label>
+            <label for="skipped"><span class="skipped"><input type="checkbox" id="skipped" checked="checked" /> Skipped: <b>${epCounts[Overview.SKIPPED]}</b></span></label>
+            <label for="snatched"><span class="snatched"><input type="checkbox" id="snatched" checked="checked" /> Snatched: <b>${total_snatched}</b></span></label>
         </div>
 
         <button id="popover" type="button" class="btn btn-xs">Select Columns <b class="caret"></b></button>
@@ -264,9 +265,9 @@
             <button class="btn btn-xs clearAll">Clear All</button>
         </div>
     </div>
-<br />
-<br />
-<br />
+<br>
+<br>
+<br>
 
 <table id="${("showTable", "animeTable")[bool(show.is_anime)]}" class="displayShowTable display_show" cellspacing="0" border="0" cellpadding="0">
     <% curSeason = -1 %>
@@ -337,7 +338,7 @@
         <tr style="height: 60px;">
             <th class="row-seasonheader displayShowTable" colspan="13" style="vertical-align: bottom; width: auto;">
                 <h3 style="display: inline;"><a name="season-${epResult["season"]}"></a>${("Specials", "Season " + str(epResult["season"]))[int(epResult["season"]) > 0]}</h3>
-                % if sickbeard.DISPLAY_ALL_SEASONS == False:
+                % if sickbeard.DISPLAY_ALL_SEASONS is False:
                     <button id="showseason-${epResult['season']}" type="button" class="btn btn-xs pull-right" data-toggle="collapse" data-target="#collapseSeason-${epResult['season']}">Show Episodes</button>
                     <script type="text/javascript">
                         $(function() {
@@ -377,7 +378,7 @@
         <tr style="height: 60px;">
             <th class="row-seasonheader displayShowTable" colspan="13" style="vertical-align: bottom; width: auto;">
                 <h3 style="display: inline;"><a name="season-${epResult["season"]}"></a>${("Specials", "Season " + str(epResult["season"]))[bool(int(epResult["season"]))]}</h3>
-                % if sickbeard.DISPLAY_ALL_SEASONS == False:
+                % if sickbeard.DISPLAY_ALL_SEASONS is False:
                     <button id="showseason-${epResult['season']}" type="button" class="btn btn-xs pull-right" data-toggle="collapse" data-target="#collapseSeason-${epResult['season']}">Show Episodes</button>
                     <script type="text/javascript">
                         $(function() {
@@ -413,7 +414,7 @@
         </tr>
             % endif
     </tbody>
-        % if sickbeard.DISPLAY_ALL_SEASONS == False:
+        % if sickbeard.DISPLAY_ALL_SEASONS is False:
         <tbody class="collapse${("", " in")[curSeason == -1]}" id="collapseSeason-${epResult['season']}">
         % else:
         <tbody>
@@ -431,7 +432,7 @@
             <td align="center">
             <%
                 text = str(epResult['episode'])
-                if epLoc != '' and epLoc != None:
+                if epLoc != '' and epLoc is not None:
                     text = '<span title="' + epLoc + '" class="addQTip">' + text + "</span>"
             %>
                 ${text}
@@ -447,7 +448,7 @@
                     % else:
                         value="${str(scSeas)}x${str(scEpis)}"
                     % endif
-                        style="padding: 0; text-align: center; max-width: 60px;" />
+                        style="padding: 0; text-align: center; max-width: 60px;" autocapitalize="off" />
             </td>
             <td align="center">
                 <input type="text" placeholder="${str(dfltAbsolute)}" size="6" maxlength="8"
@@ -459,10 +460,10 @@
                     % else:
                         value="${str(scAbsolute)}"
                     % endif
-                        style="padding: 0; text-align: center; max-width: 60px;" />
+                        style="padding: 0; text-align: center; max-width: 60px;" autocapitalize="off" />
             </td>
             <td class="col-name">
-            % if epResult["description"] != "" and epResult["description"] != None:
+            % if epResult["description"] != "" and epResult["description"] is not None:
                 <img src="${srRoot}/images/info32.png" width="16" height="16" class="plotInfo" alt="" id="plot_info_${str(show.indexerid)}_${str(epResult["season"])}_${str(epResult["episode"])}" />
             % else:
                 <img src="${srRoot}/images/info32.png" width="16" height="16" class="plotInfoNone" alt="" />
@@ -472,8 +473,7 @@
             <td class="col-name">${epLoc}</td>
             <td class="col-ep">
                 % if epResult["file_size"]:
-                    <% file_size = sickbeard.helpers.pretty_filesize(epResult["file_size"]) %>
-                    ${file_size}
+                    ${pretty_file_size(epResult["file_size"])}
                 % endif
             </td>
             <td class="col-airdate">
@@ -481,7 +481,7 @@
                     ## Lets do this exactly like ComingEpisodes and History
                     ## Avoid issues with dateutil's _isdst on Windows but still provide air dates
                     <% airDate = datetime.datetime.fromordinal(epResult['airdate']) %>
-                    % if airDate.year >= 1970 or show.network:  
+                    % if airDate.year >= 1970 or show.network:
                         <% airDate = sbdatetime.sbdatetime.convert_to_setting(network_timezones.parse_date_time(epResult['airdate'], show.airs, show.network)) %>
                     % endif
                     <time datetime="${airDate.isoformat('T')}" class="date">${sbdatetime.sbdatetime.sbfdatetime(airDate)}</time>
@@ -502,12 +502,10 @@
                 % endif
             </td>
             <td class="col-subtitles" align="center">
-            % for sub_lang in [subtitles.fromietf(x) for x in epResult["subtitles"].split(',') if epResult["subtitles"]]:
-                <% flag = sub_lang.opensubtitles %>
-                % if (not sickbeard.SUBTITLES_MULTI and len(subtitles.wantedLanguages()) is 1) and subtitles.wantedLanguages()[0] in sub_lang.opensubtitles:
-                    <% flag = 'checkbox' %>
+            % for flag in (epResult["subtitles"] or '').split(','):
+                % if flag.strip():
+                    <img src="${srRoot}/images/subtitles/flags/${flag}.png" width="16" height="11" alt="${subtitles.name_from_code(flag)}" onError="this.onerror=null;this.src='${srRoot}/images/flags/unknown.png';" />
                 % endif
-                <img src="${srRoot}/images/subtitles/flags/${flag}.png" width="16" height="11" alt="${sub_lang.name}" onError="this.onerror=null;this.src='${srRoot}/images/flags/unknown.png';" />
             % endfor
             </td>
                 <% curStatus, curQuality = Quality.splitCompositeStatus(int(epResult["status"])) %>
@@ -518,13 +516,13 @@
                 % endif
             <td class="col-search">
                 % if int(epResult["season"]) != 0:
-                    % if ( int(epResult["status"]) in Quality.SNATCHED + Quality.DOWNLOADED ) and sickbeard.USE_FAILED_DOWNLOADS:
+                    % if ( int(epResult["status"]) in Quality.SNATCHED + Quality.SNATCHED_PROPER + Quality.SNATCHED_BEST + Quality.DOWNLOADED ) and sickbeard.USE_FAILED_DOWNLOADS:
                         <a class="epRetry" id="${str(show.indexerid)}x${str(epResult["season"])}x${str(epResult["episode"])}" name="${str(show.indexerid)}x${str(epResult["season"])}x${str(epResult["episode"])}" href="retryEpisode?show=${show.indexerid}&amp;season=${epResult["season"]}&amp;episode=${epResult["episode"]}"><img src="${srRoot}/images/search16.png" height="16" alt="retry" title="Retry Download" /></a>
                     % else:
                         <a class="epSearch" id="${str(show.indexerid)}x${str(epResult["season"])}x${str(epResult["episode"])}" name="${str(show.indexerid)}x${str(epResult["season"])}x${str(epResult["episode"])}" href="searchEpisode?show=${show.indexerid}&amp;season=${epResult["season"]}&amp;episode=${epResult["episode"]}"><img src="${srRoot}/images/search16.png" width="16" height="16" alt="search" title="Manual Search" /></a>
                     % endif
                 % endif
-                % if sickbeard.USE_SUBTITLES and show.subtitles and epResult["location"] and frozenset(subtitles.wantedLanguages()).difference(epResult["subtitles"].split(',')):
+                % if sickbeard.USE_SUBTITLES and show.subtitles and epResult["location"] and subtitles.needs_subtitles(epResult['subtitles']):
                     <a class="epSubtitlesSearch" href="searchEpisodeSubtitles?show=${show.indexerid}&amp;season=${epResult["season"]}&amp;episode=${epResult["episode"]}"><img src="${srRoot}/images/closed_captioning.png" height="16" alt="search subtitles" title="Search Subtitles" /></a>
                 % endif
             </td>

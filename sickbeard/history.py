@@ -1,6 +1,7 @@
+# coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: https://sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # This file is part of SickRage.
 #
@@ -62,7 +63,7 @@ def logSnatch(searchResult):
         version = searchResult.version
 
         providerClass = searchResult.provider
-        if providerClass != None:
+        if providerClass is not None:
             provider = providerClass.name
         else:
             provider = "unknown"

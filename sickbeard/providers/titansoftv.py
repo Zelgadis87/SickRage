@@ -2,7 +2,7 @@
 # URL: http://code.google.com/p/sickbeard
 # Originally written for SickGear
 #
-# This file is part of SickRage. 
+# This file is part of SickRage.
 #
 # SickRage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,32 +19,28 @@
 
 import urllib
 
-import generic
 from sickbeard import logger
 from sickbeard import tvcache
 from sickbeard.helpers import mapIndexersToShow
 from sickrage.helper.exceptions import AuthException
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class TitansOfTVProvider(generic.TorrentProvider):
+class TitansOfTVProvider(TorrentProvider):
     def __init__(self):
-        generic.TorrentProvider.__init__(self, 'TitansOfTV')
-        self.supportsBacklog = True
+        TorrentProvider.__init__(self, 'TitansOfTV')
 
-        self.supportsAbsoluteNumbering = True
+        self.supports_absolute_numbering = True
         self.api_key = None
         self.ratio = None
         self.cache = TitansOfTVCache(self)
         self.url = 'http://titansof.tv/api/torrents'
         self.download_url = 'http://titansof.tv/api/torrents/%s/download?apikey=%s'
 
-    def isEnabled(self):
-        return self.enabled
-
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
-    def _checkAuth(self):
+    def _check_auth(self):
         if not self.api_key:
             raise AuthException('Your authentication credentials for ' + self.name + ' are missing, check your config.')
 
@@ -54,12 +50,13 @@ class TitansOfTVProvider(generic.TorrentProvider):
 
         if 'error' in data:
             logger.log(u"Invalid api key. Check your settings", logger.WARNING)
+            return False
 
         return True
 
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
-        #FIXME ADD MODE
-        self._checkAuth()
+    def search(self, search_params, age=0, ep_obj=None):
+        # FIXME ADD MODE
+        self._check_auth()
         results = []
         params = {}
         self.headers.update({'X-Authorization': self.api_key})
@@ -69,26 +66,26 @@ class TitansOfTVProvider(generic.TorrentProvider):
 
         searchURL = self.url + '?' + urllib.urlencode(params)
         logger.log(u"Search string: %s " % search_params, logger.DEBUG)
-        logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG) 
+        logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
 
-        parsedJSON = self.getURL(searchURL, json=True)  # do search
+        parsedJSON = self.get_url(searchURL, json=True)  # do search
 
         if not parsedJSON:
-            logger.log("No data returned from provider", logger.DEBUG)
+            logger.log(u"No data returned from provider", logger.DEBUG)
             return results
 
         if self._checkAuthFromData(parsedJSON):
 
             try:
                 found_torrents = parsedJSON['results']
-            except:
+            except Exception:
                 found_torrents = {}
 
             for result in found_torrents:
-                title = parsedJSON['release_name']
-                id = parsedJSON['id']
-                download_url = self.download_url % (id, self.api_key)
-                #FIXME
+                title = result.get('release_name', '')
+                tid = result.get('id', '')
+                download_url = self.download_url % (tid, self.api_key)
+                # FIXME size, seeders, leechers
                 size = -1
                 seeders = 1
                 leechers = 0
@@ -96,8 +93,8 @@ class TitansOfTVProvider(generic.TorrentProvider):
                 if not all([title, download_url]):
                     continue
 
-                #Filter unseeded torrent
-                #if seeders < self.minseed or leechers < self.minleech:
+                # Filter unseeded torrent
+                # if seeders < self.minseed or leechers < self.minleech:
                 #    if mode != 'RSS':
                 #        logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
                 #    continue
@@ -105,16 +102,17 @@ class TitansOfTVProvider(generic.TorrentProvider):
                 item = title, download_url, size, seeders, leechers
 
                 logger.log(u"Found result: %s " % title, logger.DEBUG)
-                results.append(result)
+                results.append(item)
 
-        #FIXME SORTING
+        # FIXME SORTING
 
         return results
 
     def _get_season_search_strings(self, ep_obj):
-        search_params = {'limit': 100}
-
-        search_params['season'] = 'Season %02d' % ep_obj.scene_season
+        search_params = {
+            'limit': 100,
+            'season': 'Season %02d' % ep_obj.scene_season
+        }
 
         if ep_obj.show.indexer == 1:
             search_params['series_id'] = ep_obj.show.indexerid
@@ -130,10 +128,12 @@ class TitansOfTVProvider(generic.TorrentProvider):
         if not ep_obj:
             return [{}]
 
-        search_params = {'limit': 100}
+        search_params = {
+            'limit': 100,
+            'episode': 'S%02dE%02d' % (ep_obj.scene_season, ep_obj.scene_episode)
+        }
 
         # Do a general name search for the episode, formatted like SXXEYY
-        search_params['episode'] = 'S%02dE%02d' % (ep_obj.scene_season, ep_obj.scene_episode)
 
         if ep_obj.show.indexer == 1:
             search_params['series_id'] = ep_obj.show.indexerid
@@ -154,7 +154,7 @@ class TitansOfTVCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_params = {'limit': 100}
-        return self.provider._doSearch(search_params)
+        return self.provider.search(search_params)
 
 
 provider = TitansOfTVProvider()

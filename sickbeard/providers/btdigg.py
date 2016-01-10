@@ -1,111 +1,133 @@
+# coding=utf-8
 # Author: Jodi Jones <venom@gen-x.co.nz>
 # URL: http://code.google.com/p/sickbeard/
-#
-#Ported to sickrage by: matigonkas
+# Rewrite: Gonçalo <matigonkas@outlook.com>
+# URL: https://github.com/SickRage/SickRage
 #
 # This file is part of SickRage.
 #
-# Sick Beard is free software: you can redistribute it and/or modify
+# SickRage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# Sick Beard is distributed in the hope that it will be useful,
+# SickRage is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with Sick Beard.  If not, see <http://www.gnu.org/licenses/>.
+# along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-from sickbeard.providers import generic
-
+from urllib import urlencode
 from sickbeard import logger
 from sickbeard import tvcache
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
-class BTDIGGProvider(generic.TorrentProvider):
+
+class BTDIGGProvider(TorrentProvider):
 
     def __init__(self):
-        generic.TorrentProvider.__init__(self, "BTDigg")
+        TorrentProvider.__init__(self, "BTDigg")
 
-        self.supportsBacklog = True
         self.public = True
         self.ratio = 0
         self.urls = {'url': u'https://btdigg.org/',
-                     'api': u'https://api.btdigg.org/'}
+                     'api': u'https://api.btdigg.org/api/private-341ada3245790954/s02'}
+
+        self.proper_strings = ['PROPER', 'REPACK']
 
         self.url = self.urls['url']
 
+        # # Unsupported
+        # self.minseed = 1
+        # self.minleech = 0
+
         self.cache = BTDiggCache(self)
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
+        search_params = {'p': 0}
 
-        for mode in search_strings.keys():
+        for mode in search_strings:
             logger.log(u"Search Mode: %s" % mode, logger.DEBUG)
             for search_string in search_strings[mode]:
+                search_params['q'] = search_string.encode('utf-8')
 
                 if mode != 'RSS':
                     logger.log(u"Search string: %s" % search_string, logger.DEBUG)
+                    search_params['order'] = '0'
+                else:
+                    search_params['order'] = '2'
 
-                searchURL = self.urls['api'] + "api/private-341ada3245790954/s02?q=" + search_string + "&p=0&order=1"
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
+                search_url = self.urls['api'] + '?' + urlencode(search_params)
+                logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
 
-                jdata = self.getURL(searchURL, json=True)
+                jdata = self.get_url(search_url, json=True)
                 if not jdata:
-                    logger.log("No data returned to be parsed!!!")
-                    return []
+                    logger.log(u"No data returned to be parsed!!!", logger.DEBUG)
+                    continue
 
                 for torrent in jdata:
-                    if not torrent['ff']:
-                        title = torrent['name']
-                        download_url = torrent['magnet']
-                        size = torrent['size']
-                        #FIXME
-                        seeders = 1
-                        leechers = 0
+                    if not torrent['name']:
+                        logger.log(u"Ignoring result since it has no name", logger.DEBUG)
+                        continue
 
-                        if not all([title, download_url]):
-                            continue
+                    if torrent['ff']:
+                        logger.log(u"Ignoring result for %s since it's a fake (level = %s)" % (torrent['name'], torrent['ff']), logger.DEBUG)
+                        continue
 
-                        #Filter unseeded torrent
-                        #if seeders < self.minseed or leechers < self.minleech:
-                        #    if mode != 'RSS':
-                        #        logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
-                        #    continue
+                    if not torrent['files']:
+                        logger.log(u"Ignoring result for %s without files" % torrent['name'], logger.DEBUG)
+                        continue
 
-                        item = title, download_url, size, seeders, leechers
-                        if mode != 'RSS':
-                            logger.log(u"Found result: %s" % title, logger.DEBUG)
+                    download_url = torrent['magnet'] + self._custom_trackers
 
-                        items[mode].append(item)
+                    if not download_url:
+                        logger.log(u"Ignoring result for %s without a url" % torrent['name'], logger.DEBUG)
+                        continue
 
-            #For each search mode sort all the items by seeders if available
-            items[mode].sort(key=lambda tup: tup[3], reverse=True)
+                    # FIXME
+                    seeders = 1
+                    leechers = 0
+
+                    # # Filter unseeded torrent (Unsupported)
+                    # if seeders < self.minseed or leechers < self.minleech:
+                    #    if mode != 'RSS':
+                    #        logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
+                    #    continue
+
+                    if mode != 'RSS':
+                        logger.log(u"Found result: %s" % torrent['name'], logger.DEBUG)
+
+                    item = torrent['name'], download_url, torrent['size'], seeders, leechers
+                    items[mode].append(item)
+
+            # # For each search mode sort all the items by seeders if available (Unsupported)
+            # items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
+
 
 class BTDiggCache(tvcache.TVCache):
     def __init__(self, provider_obj):
 
         tvcache.TVCache.__init__(self, provider_obj)
 
-        # set this 0 to suppress log line, since we aren't updating it anyways
-        self.minTime = 0
+        # Cache results for a 30min, since BTDigg takes some time to crawl
+        self.minTime = 30
 
     def _getRSSData(self):
-        # no rss for btdigg, can't search with empty string
-        # newest results are always > 1 day since added anyways
-        return {'entries': {}}
+
+        # Use this hacky way for RSS search since most results will use this codecs
+        search_params = {'RSS': ['x264', 'x264.HDTV', '720.HDTV.x264']}
+        return {'entries': self.provider.search(search_params)}
 
 provider = BTDIGGProvider()

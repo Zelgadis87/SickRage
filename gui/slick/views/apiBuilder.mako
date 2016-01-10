@@ -34,7 +34,6 @@
     <meta data-var="sickbeard.COMING_EPS_LAYOUT" data-content="${sickbeard.COMING_EPS_LAYOUT}">
     <meta data-var="sickbeard.COMING_EPS_SORT" data-content="${sickbeard.COMING_EPS_SORT}">
     <meta data-var="sickbeard.DATE_PRESET" data-content="${sickbeard.DATE_PRESET}">
-    <meta data-var="sickbeard.FILTER_ROW" data-content="${sickbeard.FILTER_ROW}">
     <meta data-var="sickbeard.FUZZY_DATING" data-content="${sickbeard.FUZZY_DATING}">
     <meta data-var="sickbeard.HISTORY_LAYOUT" data-content="${sickbeard.HISTORY_LAYOUT}">
     <meta data-var="sickbeard.HOME_LAYOUT" data-content="${sickbeard.HOME_LAYOUT}">
@@ -96,7 +95,7 @@
             <ul class="nav navbar-nav navbar-right">
                 <li><a href="${srRoot}/home/">Back to SickRage</a></li>
                 <li class="hidden-xs">
-                    <a href="https://github.com/SiCKRAGETV/SickRage/wiki/Donations" rel="noreferrer" onclick="window.open('${sickbeard.ANON_REDIRECT}' + this.href); return false;">
+                    <a href="https://github.com/SickRage/SickRage/wiki/Donations" rel="noreferrer" onclick="window.open('${sickbeard.ANON_REDIRECT}' + this.href); return false;">
                         <img src="${srRoot}/images/donate.jpg" alt="[donate]" class="navbaricon" />
                     </a>
                 </li>
@@ -149,22 +148,22 @@
 
                     <h4>Playground</h4>
 
-                    URL: <kbd id="command-${command_id}-base-url">/api/${apikey}/?cmd=${command}</kbd><br />
+                    URL: <kbd id="command-${command_id}-base-url">/api/${apikey}/?cmd=${command}</kbd><br>
 
                     % if help['data']['requiredParameters']:
-                        Required parameters: ${display_parameters_playground(help['data']['requiredParameters'], True, command_id)}<br />
+                        Required parameters: ${display_parameters_playground(help['data']['requiredParameters'], True, command_id)}<br>
                     % endif
 
                     % if help['data']['optionalParameters']:
-                        Optional parameters: ${display_parameters_playground(help['data']['optionalParameters'], False, command_id)}<br />
+                        Optional parameters: ${display_parameters_playground(help['data']['optionalParameters'], False, command_id)}<br>
                     % endif
 
-                    <button class="btn btn-primary" data-action="api-call" data-command-name="${command_id}" data-base-url="command-${command_id}-base-url" data-target="#command-${command_id}-response" data-time="#command-${command_id}-time" data-url="#command-${command_id}-url">Call API</button><br />
+                    <button class="btn btn-primary" data-action="api-call" data-command-name="${command_id}" data-base-url="command-${command_id}-base-url" data-target="#command-${command_id}-response" data-time="#command-${command_id}-time" data-url="#command-${command_id}-url">Call API</button><br>
 
                     <div class="result-wrapper hidden">
                         <div class="clearfix">
                             <span class="pull-left">
-                                Response: <strong id="command-${command_id}-time"></strong><br />
+                                Response: <strong id="command-${command_id}-time"></strong><br>
                                 URL: <kbd id="command-${command_id}-url"></kbd>
                             </span>
                             <span class="pull-right">
@@ -185,9 +184,8 @@
 var commands = ${sorted(commands)};
 var episodes = ${episodes};
 </script>
-<script type="text/javascript" src="${srRoot}/js/_bower.min.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/new/meta.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/new/core.js?${sbPID}"></script>
+<script type="text/javascript" src="${srRoot}/js/vender.min.js?${sbPID}"></script>
+<script type="text/javascript" src="${srRoot}/js/core.min.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/apibuilder.js?${sbPID}"></script>
 </body>
 </html>
@@ -211,10 +209,10 @@ var episodes = ${episodes};
                 <span class="glyphicon glyphicon-remove text-muted" title="No"></span>
             % endif
         </td>
-        <td>${parameter_help['desc'] if 'desc' in parameter_help else ''}</td>
-        <td>${parameter_help['type'] if 'type' in parameter_help else ''}</td>
-        <td>${parameter_help['defaultValue'] if 'defaultValue' in parameter_help else ''}</td>
-        <td>${parameter_help['allowedValues'] if 'allowedValues' in parameter_help else ''}</td>
+        <td>${parameter_help.get('desc', '')}</td>
+        <td>${parameter_help.get('type', '')}</td>
+        <td>${parameter_help.get('defaultValue', '')}</td>
+        <td>${parameter_help.get('allowedValues', '')}</td>
     </tr>
 % endfor
 </tbody>
@@ -225,8 +223,8 @@ var episodes = ${episodes};
     % for parameter in parameters:
     <%
         parameter_help = parameters[parameter]
-        allowed_values = parameter_help['allowedValues'] if 'allowedValues' in parameter_help else ''
-        type = parameter_help['type'] if 'type' in parameter_help else ''
+        allowed_values = parameter_help.get('allowedValues', '')
+        type = parameter_help.get('type', '')
     %>
 
     % if isinstance(allowed_values, list):
@@ -263,13 +261,7 @@ var episodes = ${episodes};
         </select>
         % endif
     % elif parameter == 'tvdbid':
-        <select class="form-control" name="${parameter}" data-command="${command}">
-            <option>${parameter}</option>
-
-            % for show in shows:
-            <option value="${show.indexerid}">${show.name}</option>
-            % endfor
-        </select>
+        <input class="form-control" name="${parameter}" placeholder="${parameter}" type="number" data-command="${command}" />
     % elif type == 'int':
         % if parameter not in ('episode', 'season'):
         <input class="form-control" name="${parameter}" placeholder="${parameter}" type="number" data-command="${command}" />

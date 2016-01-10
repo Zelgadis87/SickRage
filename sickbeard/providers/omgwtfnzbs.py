@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Jordon Smith <smith@jordon.me.uk>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -24,12 +25,13 @@ from sickbeard import tvcache
 from sickbeard import classes
 from sickbeard import logger
 from sickbeard import show_name_helpers
-from sickbeard.providers import generic
+from sickrage.helper.common import try_int
+from sickrage.providers.nzb.NZBProvider import NZBProvider
 
 
-class OmgwtfnzbsProvider(generic.NZBProvider):
+class OmgwtfnzbsProvider(NZBProvider):
     def __init__(self):
-        generic.NZBProvider.__init__(self, "omgwtfnzbs")
+        NZBProvider.__init__(self, "omgwtfnzbs")
 
         self.username = None
         self.api_key = None
@@ -38,13 +40,7 @@ class OmgwtfnzbsProvider(generic.NZBProvider):
         self.urls = {'base_url': 'https://omgwtfnzbs.org/'}
         self.url = self.urls['base_url']
 
-        self.supportsBacklog = True
-
-
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
 
         if not self.username or not self.api_key:
             logger.log(u"Invalid api key. Check your settings", logger.WARNING)
@@ -54,7 +50,7 @@ class OmgwtfnzbsProvider(generic.NZBProvider):
     def _checkAuthFromData(self, parsed_data, is_XML=True):
 
         if parsed_data is None:
-            return self._checkAuth()
+            return self._check_auth()
 
         if is_XML:
             # provider doesn't return xml on error
@@ -72,7 +68,7 @@ class OmgwtfnzbsProvider(generic.NZBProvider):
                     return True
 
                 else:
-                    logger.log(u"Unknown error: %s"  % description_text, logger.DEBUG)
+                    logger.log(u"Unknown error: %s" % description_text, logger.DEBUG)
                     return False
 
             return True
@@ -84,19 +80,14 @@ class OmgwtfnzbsProvider(generic.NZBProvider):
         return [x for x in show_name_helpers.makeSceneSearchString(self.show, ep_obj)]
 
     def _get_title_and_url(self, item):
-        return (item['release'], item['getnzb'])
+        return item['release'], item['getnzb']
 
     def _get_size(self, item):
-        try:
-            size = int(item['sizebytes'])
-        except (ValueError, TypeError, AttributeError, KeyError):
-            return -1
+        return try_int(item['sizebytes'], -1)
 
-        return size
+    def search(self, search, age=0, ep_obj=None):
 
-    def _doSearch(self, search, search_mode='eponly', epcount=0, retention=0, epObj=None):
-
-        self._checkAuth()
+        self._check_auth()
 
         params = {'user': self.username,
                   'api': self.api_key,
@@ -105,14 +96,14 @@ class OmgwtfnzbsProvider(generic.NZBProvider):
                   'retention': sickbeard.USENET_RETENTION,
                   'search': search}
 
-        if retention or not params['retention']:
-            params['retention'] = retention
+        if age or not params['retention']:
+            params['retention'] = age
 
         searchURL = 'https://api.omgwtfnzbs.org/json/?' + urllib.urlencode(params)
         logger.log(u"Search string: %s" % params, logger.DEBUG)
-        logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
+        logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
 
-        parsedJSON = self.getURL(searchURL, json=True)
+        parsedJSON = self.get_url(searchURL, json=True)
         if not parsedJSON:
             return []
 
@@ -128,12 +119,12 @@ class OmgwtfnzbsProvider(generic.NZBProvider):
 
         return []
 
-    def findPropers(self, search_date=None):
+    def find_propers(self, search_date=None):
         search_terms = ['.PROPER.', '.REPACK.']
         results = []
 
         for term in search_terms:
-            for item in self._doSearch(term, retention=4):
+            for item in self.search(term, age=4):
                 if 'usenetage' in item:
 
                     title, url = self._get_title_and_url(item)
@@ -171,7 +162,7 @@ class OmgwtfnzbsCache(tvcache.TVCache):
         if url:
             url = url.replace('&amp;', '&')
 
-        return (title, url)
+        return title, url
 
     def _getRSSData(self):
         params = {'user': provider.username,

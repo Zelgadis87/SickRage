@@ -2,9 +2,6 @@
 <%!
     import sickbeard
 %>
-<%block name="scripts">
-<script type="text/javascript" src="${srRoot}/js/new/home_postprocess.js"></script>
-</%block>
 <%block name="content">
 <div id="content800">
 % if not header is UNDEFINED:
@@ -22,7 +19,7 @@
                 <b>Enter the folder containing the episode:</b>
             </td>
             <td>
-                <input type="text" name="dir" id="episodeDir" class="form-control form-control-inline input-sm input350" />
+                <input type="text" name="dir" id="episodeDir" class="form-control form-control-inline input-sm input350" autocapitalize="off" />
             </td>
         </tr>
         <tr>

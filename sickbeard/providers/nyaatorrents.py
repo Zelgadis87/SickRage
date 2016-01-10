@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Mr_Orange
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -19,23 +20,18 @@
 import urllib
 import re
 
-import generic
-
-from sickbeard import show_name_helpers
 from sickbeard import logger
-from sickbeard.common import Quality
 from sickbeard import tvcache
-from sickbeard import show_name_helpers
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class NyaaProvider(generic.TorrentProvider):
+class NyaaProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "NyaaTorrents")
+        TorrentProvider.__init__(self, "NyaaTorrents")
 
-        self.supportsBacklog = True
         self.public = True
-        self.supportsAbsoluteNumbering = True
+        self.supports_absolute_numbering = True
         self.anime_only = True
         self.ratio = None
 
@@ -49,10 +45,7 @@ class NyaaProvider(generic.TorrentProvider):
         self.minleech = 0
         self.confirmed = False
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
         if self.show and not self.show.is_anime:
             return []
 
@@ -75,13 +68,13 @@ class NyaaProvider(generic.TorrentProvider):
                     params["term"] = search_string.encode('utf-8')
 
                 searchURL = self.url + '?' + urllib.urlencode(params)
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
+                logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
 
                 summary_regex = ur"(\d+) seeder\(s\), (\d+) leecher\(s\), \d+ download\(s\) - (\d+.?\d* [KMGT]iB)(.*)"
                 s = re.compile(summary_regex, re.DOTALL)
 
                 results = []
-                for curItem in self.cache.getRSSFeed(searchURL, items=['entries'])['entries'] or []:
+                for curItem in self.cache.getRSSFeed(searchURL)['entries'] or []:
                     title = curItem['title']
                     download_url = curItem['link']
                     if not all([title, download_url]):
@@ -113,28 +106,21 @@ class NyaaProvider(generic.TorrentProvider):
 
         return results
 
-    def _extract_name_from_filename(self, filename):
-        name_regex = '(.*?)\.?(\[.*]|\d+\.TPB)\.torrent$'
-        logger.log(u"Comparing %s against %s" % (name_regex, filename), logger.DEBUG)
-        match = re.match(name_regex, filename, re.I)
-        if match:
-            return match.group(1)
-        return None
-
-    def _convertSize(self, size):
+    @staticmethod
+    def _convertSize(size):
         size, modifier = size.split(' ')
         size = float(size)
         if modifier in 'KiB':
-            size = size * 1024
+            size *= 1024 ** 1
         elif modifier in 'MiB':
-            size = size * 1024**2
+            size *= 1024 ** 2
         elif modifier in 'GiB':
-            size = size * 1024**3
+            size *= 1024 ** 3
         elif modifier in 'TiB':
-            size = size * 1024**4
-        return size
+            size *= 1024 ** 4
+        return long(size)
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -147,6 +133,6 @@ class NyaaCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_params = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_params)}
+        return {'entries': self.provider.search(search_params)}
 
 provider = NyaaProvider()

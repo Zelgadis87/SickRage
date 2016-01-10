@@ -1,6 +1,7 @@
+# coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: https://sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # This file is part of SickRage.
 #
@@ -36,7 +37,7 @@ from sickrage.show.History import History
 from sickbeard.name_parser.parser import NameParser, InvalidNameException, InvalidShowException
 
 
-class ProperFinder:
+class ProperFinder(object):
     def __init__(self):
         self.amActive = False
 
@@ -79,18 +80,18 @@ class ProperFinder:
 
         # for each provider get a list of the
         origThreadName = threading.currentThread().name
-        providers = [x for x in sickbeard.providers.sortedProviderList(sickbeard.RANDOMIZE_PROVIDERS) if x.isActive()]
+        providers = [x for x in sickbeard.providers.sortedProviderList(sickbeard.RANDOMIZE_PROVIDERS) if x.is_active()]
         for curProvider in providers:
             threading.currentThread().name = origThreadName + " :: [" + curProvider.name + "]"
 
             logger.log(u"Searching for any new PROPER releases from " + curProvider.name)
 
             try:
-                curPropers = curProvider.findPropers(search_date)
-            except AuthException, e:
+                curPropers = curProvider.find_propers(search_date)
+            except AuthException as e:
                 logger.log(u"Authentication error: " + ex(e), logger.DEBUG)
                 continue
-            except Exception, e:
+            except Exception as e:
                 logger.log(u"Error while searching " + curProvider.name + ", skipping: " + ex(e), logger.DEBUG)
                 logger.log(traceback.format_exc(), logger.DEBUG)
                 continue
@@ -98,11 +99,11 @@ class ProperFinder:
             # if they haven't been added by a different provider than add the proper to the list
             for x in curPropers:
                 if not re.search(r'(^|[\. _-])(proper|repack)([\. _-]|$)', x.name, re.I):
-                    logger.log(u'findPropers returned a non-proper, we have caught and skipped it.', logger.DEBUG)
+                    logger.log(u'find_propers returned a non-proper, we have caught and skipped it.', logger.DEBUG)
                     continue
 
                 name = self._genericName(x.name)
-                if not name in propers:
+                if name not in propers:
                     logger.log(u"Found new proper: " + x.name, logger.DEBUG)
                     x.provider = curProvider
                     propers[name] = x
@@ -188,13 +189,13 @@ class ProperFinder:
                 oldVersion = int(sqlResults[0]["version"])
                 oldRelease_group = (sqlResults[0]["release_group"])
 
-                if oldVersion > -1 and oldVersion < bestResult.version:
-                    logger.log("Found new anime v" + str(bestResult.version) + " to replace existing v" + str(oldVersion))
+                if -1 < oldVersion < bestResult.version:
+                    logger.log(u"Found new anime v" + str(bestResult.version) + " to replace existing v" + str(oldVersion))
                 else:
                     continue
 
                 if oldRelease_group != bestResult.release_group:
-                    logger.log("Skipping proper from release group: " + bestResult.release_group + ", does not match existing release group: " + oldRelease_group)
+                    logger.log(u"Skipping proper from release group: " + bestResult.release_group + ", does not match existing release group: " + oldRelease_group)
                     continue
 
             # if the show is in our list and there hasn't been a proper already added for that particular episode then add it to our list of propers
@@ -249,7 +250,7 @@ class ProperFinder:
                 epObj = curProper.show.getEpisode(curProper.season, curProper.episode)
 
                 # make the result object
-                result = curProper.provider.getResult([epObj])
+                result = curProper.provider.get_result([epObj])
                 result.show = curProper.show
                 result.url = curProper.url
                 result.name = curProper.name
@@ -275,7 +276,7 @@ class ProperFinder:
         logger.log(u"Setting the last Proper search in the DB to " + str(when), logger.DEBUG)
 
         myDB = db.DBConnection()
-        sqlResults = myDB.select("SELECT * FROM info")
+        sqlResults = myDB.select("SELECT last_proper_search FROM info")
 
         if len(sqlResults) == 0:
             myDB.action("INSERT INTO info (last_backlog, last_indexer, last_proper_search) VALUES (?,?,?)",
@@ -289,11 +290,11 @@ class ProperFinder:
         """
 
         myDB = db.DBConnection()
-        sqlResults = myDB.select("SELECT * FROM info")
+        sqlResults = myDB.select("SELECT last_proper_search FROM info")
 
         try:
             last_proper_search = datetime.date.fromordinal(int(sqlResults[0]["last_proper_search"]))
-        except:
+        except Exception:
             return datetime.date.fromordinal(1)
 
         return last_proper_search

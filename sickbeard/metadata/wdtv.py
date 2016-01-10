@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -25,7 +27,7 @@ import sickbeard
 from sickbeard.metadata import generic
 
 from sickbeard import logger, helpers
-from sickrage.helper.common import dateFormat
+from sickrage.helper.common import dateFormat, replace_extension
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex, ShowNotFoundException
 
@@ -93,7 +95,7 @@ class WDTVMetadata(generic.GenericMetadata):
     # Override with empty methods for unsupported features
     def retrieveShowMetadata(self, folder):
         # no show metadata generated, we abort this lookup function
-        return (None, None, None)
+        return None, None, None
 
     def create_show_metadata(self, show_obj):
         pass
@@ -128,7 +130,7 @@ class WDTVMetadata(generic.GenericMetadata):
         ep_obj: a TVEpisode instance for which to create the thumbnail
         """
         if ek(os.path.isfile, ep_obj.location):
-            tbn_filename = helpers.replaceExtension(ep_obj.location, 'metathumb')
+            tbn_filename = replace_extension(ep_obj.location, 'metathumb')
         else:
             return None
 
@@ -197,9 +199,9 @@ class WDTVMetadata(generic.GenericMetadata):
 
             t = sickbeard.indexerApi(ep_obj.show.indexer).indexer(**lINDEXER_API_PARMS)
             myShow = t[ep_obj.show.indexerid]
-        except sickbeard.indexer_shownotfound, e:
+        except sickbeard.indexer_shownotfound as e:
             raise ShowNotFoundException(e.message)
-        except sickbeard.indexer_error, e:
+        except sickbeard.indexer_error as e:
             logger.log(u"Unable to connect to " + sickbeard.indexerApi(
                 ep_obj.show.indexer).name + " while creating meta files - skipping - " + ex(e), logger.ERROR)
             return False

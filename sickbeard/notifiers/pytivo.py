@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -27,7 +29,7 @@ from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
 
 
-class pyTivoNotifier:
+class pyTivoNotifier(object):
     def notify_snatch(self, ep_name):
         pass
 
@@ -38,6 +40,9 @@ class pyTivoNotifier:
         pass
 
     def notify_git_update(self, new_version):
+        pass
+
+    def notify_login(self, ipaddress=""):
         pass
 
     def update_library(self, ep_obj):
@@ -63,9 +68,7 @@ class pyTivoNotifier:
         # come up with.
         #
 
-
         # Calculated values
-
         showPath = ep_obj.show.location
         showName = ep_obj.show.name
         rootShowAndSeason = ek(os.path.dirname, ep_obj.location)
@@ -79,26 +82,26 @@ class pyTivoNotifier:
         showAndSeason = rootShowAndSeason.replace(root, "")
 
         container = shareName + "/" + showAndSeason
-        file = "/" + absPath.replace(root, "")
+        filename = "/" + absPath.replace(root, "")
 
         # Finally create the url and make request
         requestUrl = "http://" + host + "/TiVoConnect?" + urlencode(
-            {'Command': 'Push', 'Container': container, 'File': file, 'tsn': tsn})
+            {'Command': 'Push', 'Container': container, 'File': filename, 'tsn': tsn})
 
         logger.log(u"pyTivo notification: Requesting " + requestUrl, logger.DEBUG)
 
         request = Request(requestUrl)
 
         try:
-            response = urlopen(request)  #@UnusedVariable
-        except HTTPError , e:
+            response = urlopen(request)  # @UnusedVariable
+        except HTTPError as e:
             if hasattr(e, 'reason'):
                 logger.log(u"pyTivo notification: Error, failed to reach a server - " + e.reason, logger.ERROR)
                 return False
             elif hasattr(e, 'code'):
                 logger.log(u"pyTivo notification: Error, the server couldn't fulfill the request - " + e.code, logger.ERROR)
             return False
-        except Exception, e:
+        except Exception as e:
             logger.log(u"PYTIVO: Unknown exception: " + ex(e), logger.ERROR)
             return False
         else:

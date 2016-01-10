@@ -1,6 +1,7 @@
+# coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: https://sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # This file is part of SickRage.
 #
@@ -17,7 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-
 import datetime
 import threading
 
@@ -25,12 +25,12 @@ import sickbeard
 from sickbeard import logger
 from sickbeard import db
 from sickbeard import common
-from sickbeard import helpers
-from sickbeard import sbdatetime, network_timezones
+from sickbeard import network_timezones
+from sickrage.show.Show import Show
 from sickrage.helper.exceptions import MultipleShowObjectsException
 
 
-class DailySearcher():
+class DailySearcher(object):
     def __init__(self):
         self.lock = threading.Lock()
         self.amActive = False
@@ -59,7 +59,7 @@ class DailySearcher():
         curTime = datetime.datetime.now(network_timezones.sb_timezone)
 
         myDB = db.DBConnection()
-        sqlResults = myDB.select("SELECT * FROM tv_episodes WHERE status = ? AND season > 0 AND (airdate <= ? and airdate > 1)",
+        sqlResults = myDB.select("SELECT showid, airdate, season, episode FROM tv_episodes WHERE status = ? AND (airdate <= ? and airdate > 1)",
                                  [common.UNAIRED, curDate])
 
         sql_l = []
@@ -68,7 +68,7 @@ class DailySearcher():
         for sqlEp in sqlResults:
             try:
                 if not show or int(sqlEp["showid"]) != show.indexerid:
-                    show = helpers.findCertainShow(sickbeard.showList, int(sqlEp["showid"]))
+                    show = Show.find(sickbeard.showList, int(sqlEp["showid"]))
 
                 # for when there is orphaned series in the database but not loaded into our showlist
                 if not show or show.paused:
@@ -88,7 +88,7 @@ class DailySearcher():
                 if air_time > curTime:
                     continue
 
-            ep = show.getEpisode(int(sqlEp["season"]), int(sqlEp["episode"]))
+            ep = show.getEpisode(sqlEp["season"], sqlEp["episode"])
             with ep.lock:
                 if ep.season == 0:
                     logger.log(u"New episode " + ep.prettyName() + " airs today, setting status to SKIPPED because is a special season")

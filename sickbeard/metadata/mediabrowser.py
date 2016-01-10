@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -26,7 +28,7 @@ from sickbeard.metadata import generic
 
 from sickbeard import logger, helpers
 
-from sickrage.helper.common import dateFormat
+from sickrage.helper.common import dateFormat, replace_extension
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex, ShowNotFoundException
 
@@ -98,7 +100,7 @@ class MediaBrowserMetadata(generic.GenericMetadata):
     # Override with empty methods for unsupported features
     def retrieveShowMetadata(self, folder):
         # while show metadata is generated, it is not supported for our lookup
-        return (None, None, None)
+        return None, None, None
 
     def create_season_all_poster(self, show_obj):
         pass
@@ -115,7 +117,7 @@ class MediaBrowserMetadata(generic.GenericMetadata):
         """
 
         if ek(os.path.isfile, ep_obj.location):
-            xml_file_name = helpers.replaceExtension(ek(os.path.basename, ep_obj.location), self._ep_nfo_extension)
+            xml_file_name = replace_extension(ek(os.path.basename, ep_obj.location), self._ep_nfo_extension)
             metadata_dir_name = ek(os.path.join, ek(os.path.dirname, ep_obj.location), 'metadata')
             xml_file_path = ek(os.path.join, metadata_dir_name, xml_file_name)
         else:
@@ -134,7 +136,7 @@ class MediaBrowserMetadata(generic.GenericMetadata):
         """
 
         if ek(os.path.isfile, ep_obj.location):
-            tbn_file_name = helpers.replaceExtension(ek(os.path.basename, ep_obj.location), 'jpg')
+            tbn_file_name = replace_extension(ek(os.path.basename, ep_obj.location), 'jpg')
             metadata_dir_name = ek(os.path.join, ek(os.path.dirname, ep_obj.location), 'metadata')
             tbn_file_path = ek(os.path.join, metadata_dir_name, tbn_file_name)
         else:
@@ -272,7 +274,6 @@ class MediaBrowserMetadata(generic.GenericMetadata):
             indexerid = etree.SubElement(tv_node, "id")
             indexerid.text = str(myShow['id'])
 
-
         if getattr(myShow, 'seriesname', None):
             SeriesName = etree.SubElement(tv_node, "SeriesName")
             SeriesName.text = myShow['seriesname']
@@ -401,10 +402,11 @@ class MediaBrowserMetadata(generic.GenericMetadata):
 
         eps_to_write = [ep_obj] + ep_obj.relatedEps
 
-        persons_dict = {}
-        persons_dict['Director'] = []
-        persons_dict['GuestStar'] = []
-        persons_dict['Writer'] = []
+        persons_dict = {
+            'Director': [],
+            'GuestStar': [],
+            'Writer': []
+        }
 
         indexer_lang = ep_obj.show.lang
 
@@ -422,9 +424,9 @@ class MediaBrowserMetadata(generic.GenericMetadata):
             t = sickbeard.indexerApi(ep_obj.show.indexer).indexer(**lINDEXER_API_PARMS)
 
             myShow = t[ep_obj.show.indexerid]
-        except sickbeard.indexer_shownotfound, e:
+        except sickbeard.indexer_shownotfound as e:
             raise ShowNotFoundException(e.message)
-        except sickbeard.indexer_error, e:
+        except sickbeard.indexer_error as e:
             logger.log(u"Unable to connect to " + sickbeard.indexerApi(
                 ep_obj.show.indexer).name + " while creating meta files - skipping - " + ex(e), logger.ERROR)
             return False

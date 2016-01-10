@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -30,7 +32,6 @@ import growl
 import prowl
 from . import libnotify
 import pushover
-import boxcar
 import boxcar2
 import nma
 import pushalot
@@ -40,8 +41,6 @@ import freemobile
 import tweet
 import trakt
 import emailnotify
-
-from sickbeard.common import *
 
 # home theater / nas
 kodi_notifier = kodi.KODINotifier()
@@ -57,7 +56,6 @@ growl_notifier = growl.GrowlNotifier()
 prowl_notifier = prowl.ProwlNotifier()
 libnotify_notifier = libnotify.LibnotifyNotifier()
 pushover_notifier = pushover.PushoverNotifier()
-boxcar_notifier = boxcar.BoxcarNotifier()
 boxcar2_notifier = boxcar2.Boxcar2Notifier()
 nma_notifier = nma.NMA_Notifier()
 pushalot_notifier = pushalot.PushalotNotifier()
@@ -81,7 +79,6 @@ notifiers = [
     freemobile_notifier,
     prowl_notifier,
     pushover_notifier,
-    boxcar_notifier,
     boxcar2_notifier,
     nma_notifier,
     pushalot_notifier,
@@ -110,3 +107,8 @@ def notify_snatch(ep_name):
 def notify_git_update(new_version=""):
     for n in notifiers:
         n.notify_git_update(new_version)
+
+
+def notify_login(ipaddress):
+    for n in notifiers:
+        n.notify_login(ipaddress)

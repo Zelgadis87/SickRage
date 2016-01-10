@@ -23,15 +23,13 @@ import requests
 
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard.providers import generic
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class FNTProvider(generic.TorrentProvider):
+class FNTProvider(TorrentProvider):
     def __init__(self):
-        generic.TorrentProvider.__init__(self, "FNT")
-
-        self.supportsBacklog = True
+        TorrentProvider.__init__(self, "FNT")
 
         self.username = None
         self.password = None
@@ -41,10 +39,11 @@ class FNTProvider(generic.TorrentProvider):
 
         self.cache = FNTCache(self)
 
-        self.urls = {'base_url': 'https://fnt.nu',
-                     'search': 'https://www.fnt.nu/torrents/recherche/',
-                     'login': 'https://fnt.nu/account-login.php',
-                    }
+        self.urls = {
+            'base_url': 'https://fnt.nu',
+            'search': 'https://www.fnt.nu/torrents/recherche/',
+            'login': 'https://fnt.nu/account-login.php',
+        }
 
         self.url = self.urls['base_url']
         self.search_params = {
@@ -52,22 +51,20 @@ class FNTProvider(generic.TorrentProvider):
             "c137": 1, "c138": 1, "c146": 1, "c122": 1, "c110": 1, "c109": 1, "c135": 1, "c148": 1,
             "c153": 1, "c149": 1, "c150": 1, "c154": 1, "c155": 1, "c156": 1, "c114": 1,
             "visible": 1, "freeleech": 0, "nuke": 1, "3D": 0, "sort": "size", "order": "desc"
-            }
+        }
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _doLogin(self):
+    def login(self):
 
         if any(requests.utils.dict_from_cookiejar(self.session.cookies).values()):
             return True
 
-        login_params = {'username': self.username,
-                        'password': self.password,
-                        'submit' : 'Se loguer'
-                       }
+        login_params = {
+            'username': self.username,
+            'password': self.password,
+            'submit': 'Se loguer'
+        }
 
-        response = self.getURL(self.urls['login'], post_data=login_params, timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -78,15 +75,13 @@ class FNTProvider(generic.TorrentProvider):
             logger.log(u"Invalid username or password. Check your settings", logger.WARNING)
             return False
 
-        return True
-
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
         # check for auth
-        if not self._doLogin():
+        if not self.login():
             return results
 
         for mode in search_strings.keys():
@@ -98,12 +93,12 @@ class FNTProvider(generic.TorrentProvider):
 
                 self.search_params['recherche'] = search_string
 
-                data = self.getURL(self.urls['search'], params=self.search_params)
+                data = self.get_url(self.urls['search'], params=self.search_params)
                 if not data:
                     continue
 
                 try:
-                    with BS4Parser(data, features=["html5lib", "permissive"]) as html:
+                    with BS4Parser(data, 'html5lib') as html:
                         result_table = html.find('table', {'id': 'tablealign3bis'})
 
                         if not result_table:
@@ -111,7 +106,7 @@ class FNTProvider(generic.TorrentProvider):
                             continue
 
                         if result_table:
-                            rows = result_table.findAll("tr", {"class" : "ligntorrent"})
+                            rows = result_table.findAll("tr", {"class": "ligntorrent"})
 
                             for row in rows:
                                 link = row.findAll('td')[1].find("a", href=re.compile("fiche_film"))
@@ -127,7 +122,7 @@ class FNTProvider(generic.TorrentProvider):
                                         detailseedleech = link['mtcontent']
                                         seeders = int(detailseedleech.split("<font color='#00b72e'>")[1].split("</font>")[0])
                                         leechers = int(detailseedleech.split("<font color='red'>")[1].split("</font>")[0])
-                                        #FIXME
+                                        # FIXME
                                         size = -1
                                     except Exception:
                                         logger.log(u"Unable to parse torrent id & seeders & leechers. Traceback: %s " % traceback.format_exc(), logger.DEBUG)
@@ -136,7 +131,7 @@ class FNTProvider(generic.TorrentProvider):
                                     if not all([title, download_url]):
                                         continue
 
-                                    #Filter unseeded torrent
+                                    # Filter unseeded torrent
                                     if seeders < self.minseed or leechers < self.minleech:
                                         if mode != 'RSS':
                                             logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
@@ -148,17 +143,17 @@ class FNTProvider(generic.TorrentProvider):
 
                                     items[mode].append(item)
 
-                except Exception, e:
+                except Exception as e:
                     logger.log(u"Failed parsing provider. Traceback: %s" % traceback.format_exc(), logger.ERROR)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -171,7 +166,7 @@ class FNTCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_strings = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_strings)}
+        return {'entries': self.provider.search(search_strings)}
 
 
 provider = FNTProvider()

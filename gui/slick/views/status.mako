@@ -5,9 +5,6 @@
     from sickbeard.show_queue import ShowQueueActions
     from sickrage.helper.common import dateTimeFormat
 %>
-<%block name="scripts">
-<script type="text/javascript" src="${srRoot}/js/new/status.js"></script>
-</%block>
 <%block name="content">
 % if not header is UNDEFINED:
     <h1 class="header">${header}</h1>
@@ -95,10 +92,10 @@
                <td align="right"></td>
                % endif
                <% cycleTime = (service.cycleTime.microseconds + (service.cycleTime.seconds + service.cycleTime.days * 24 * 3600) * 10**6) / 10**6 %>
-               <td align="right">${helpers.pretty_time_delta(cycleTime)}</td>
+               <td align="right" data-seconds="${cycleTime}">${helpers.pretty_time_delta(cycleTime)}</td>
                % if service.enable:
                    <% timeLeft = (service.timeLeft().microseconds + (service.timeLeft().seconds + service.timeLeft().days * 24 * 3600) * 10**6) / 10**6 %>
-               <td align="right">${helpers.pretty_time_delta(timeLeft)}</td>
+               <td align="right" data-seconds="${timeLeft}">${helpers.pretty_time_delta(timeLeft)}</td>
                % else:
                <td></td>
                % endif

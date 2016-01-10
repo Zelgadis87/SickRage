@@ -1,6 +1,6 @@
 # coding=UTF-8
 # Author: Dustyn Gibson <miigotu@gmail.com>
-# URL: http://github.come/SiCKRAGETV/SickRage
+# URL: http://github.come/SickRage/SickRage
 #
 # This file is part of SickRage.
 #
@@ -17,38 +17,69 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, os.path
+# pylint: disable=line-too-long
+
+"""
+Test SNI and SSL
+"""
+
+import os.path
+import sys
+import unittest
+
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '../lib')))
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import unittest
-import requests
-
+from sickbeard import ex
+import certifi  # pylint: disable=import-error
+import requests  # pylint: disable=import-error
 import sickbeard.providers as providers
-import certifi
-from sickrage.helper.exceptions import ex
 
 
-class SNI_Tests(unittest.TestCase):
-    self_signed_cert_providers = ["Womble's Index", "Libertalia"]
-    def test_SNI_URLS(self):
-        print ''
-        #Just checking all providers - we should make this error on non-existent urls.
-        for provider in [provider for provider in providers.makeProviderList() if provider.name not in self.self_signed_cert_providers]:
-            print 'Checking %s' % provider.name
-            try:
-                requests.head(provider.url, verify=certifi.where(), timeout=5)
-            except requests.exceptions.Timeout:
-                pass
-            except requests.exceptions.SSLError as error:
-                if u'SSL3_GET_SERVER_CERTIFICATE' not in ex(error):
-                    print 'SSLError on %s: %s' % (provider.name, ex(error.message))
-                    raise
-                else:
-                    print  'Cannot verify certificate for %s' % provider.name
-            except Exception:
-                pass
+def test_generator(_provider):
+    """
+    Generate tests for each provider
+
+    :param test_strings: to generate tests from
+    :return: test
+    """
+    def _connectivity_test(self):  # pylint: disable=unused-argument
+        """
+        Generate tests
+        :param self:
+        :return: test to run
+        """
+        if not _provider.url:
+            print '%s has no url set, skipping' % _provider.name
+            return
+
+        try:
+            requests.head(_provider.url, verify=certifi.old_where(), timeout=10)
+        except requests.exceptions.SSLError as error:
+            if 'certificate verify failed' in str(error):
+                print 'Cannot verify certificate for %s' % _provider.name
+            else:
+                print 'SSLError on %s: %s' % (_provider.name, ex(error.message))
+                raise
+        except requests.exceptions.Timeout:
+            print 'Provider timed out'
+
+    return _connectivity_test
+
+
+class SniTests(unittest.TestCase):
+    pass
 
 if __name__ == "__main__":
-    suite = unittest.TestLoader().loadTestsFromTestCase(SNI_Tests)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    print("==================")
+    print("STARTING - Provider Connectivity TESTS and SSL/SNI")
+    print("==================")
+    print("######################################################################")
+    # Just checking all providers - we should make this error on non-existent urls.
+    for provider in [p for p in providers.makeProviderList()]:
+        test_name = 'test_%s' % provider.name
+        test = test_generator(provider)
+        setattr(SniTests, test_name, test)
+
+    SUITE = unittest.TestLoader().loadTestsFromTestCase(SniTests)
+    unittest.TextTestRunner(verbosity=2).run(SUITE)

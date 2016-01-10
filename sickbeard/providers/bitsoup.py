@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Idan Gutman
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -21,12 +22,13 @@ import traceback
 
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard.providers import generic
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
-class BitSoupProvider(generic.TorrentProvider):
+
+class BitSoupProvider(TorrentProvider):
     def __init__(self):
-        generic.TorrentProvider.__init__(self, "BitSoup")
+        TorrentProvider.__init__(self, "BitSoup")
 
         self.urls = {
             'base_url': 'https://www.bitsoup.me',
@@ -34,11 +36,9 @@ class BitSoupProvider(generic.TorrentProvider):
             'detail': 'https://www.bitsoup.me/details.php?id=%s',
             'search': 'https://www.bitsoup.me/browse.php',
             'download': 'https://bitsoup.me/%s',
-            }
+        }
 
         self.url = self.urls['base_url']
-
-        self.supportsBacklog = True
 
         self.username = None
         self.password = None
@@ -52,24 +52,21 @@ class BitSoupProvider(generic.TorrentProvider):
             "c42": 1, "c45": 1, "c49": 1, "c7": 1
         }
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
         if not self.username or not self.password:
             logger.log(u"Invalid username or password. Check your settings", logger.WARNING)
 
         return True
 
-    def _doLogin(self):
+    def login(self):
 
         login_params = {
             'username': self.username,
             'password': self.password,
             'ssl': 'yes'
-            }
+        }
 
-        response = self.getURL(self.urls['login'], post_data=login_params, timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -80,12 +77,12 @@ class BitSoupProvider(generic.TorrentProvider):
 
         return True
 
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
-        if not self._doLogin():
+        if not self.login():
             return results
 
         for mode in search_strings.keys():
@@ -97,7 +94,7 @@ class BitSoupProvider(generic.TorrentProvider):
 
                 self.search_params['search'] = search_string
 
-                data = self.getURL(self.urls['search'], params=self.search_params)
+                data = self.get_url(self.urls['search'], params=self.search_params)
                 if not data:
                     continue
 
@@ -106,7 +103,7 @@ class BitSoupProvider(generic.TorrentProvider):
                         torrent_table = html.find('table', attrs={'class': 'koptekst'})
                         torrent_rows = torrent_table.find_all('tr') if torrent_table else []
 
-                        #Continue only if one Release is found
+                        # Continue only if one Release is found
                         if len(torrent_rows) < 2:
                             logger.log(u"Data returned from provider does not contain any torrents", logger.DEBUG)
                             continue
@@ -119,20 +116,25 @@ class BitSoupProvider(generic.TorrentProvider):
 
                             try:
                                 title = link.getText()
-                                seeders = int(cells[10].getText())
-                                leechers = int(cells[11].getText())
-                                #FIXME
+                                seeders = int(cells[10].getText().replace(',', ''))
+                                leechers = int(cells[11].getText().replace(',', ''))
+                                torrent_size = cells[8].getText()
                                 size = -1
+                                if re.match(r"\d+([,\.]\d+)?\s*[KkMmGgTt]?[Bb]", torrent_size):
+                                    size = self._convertSize(torrent_size.rstrip())
                             except (AttributeError, TypeError):
                                 continue
 
                             if not all([title, download_url]):
                                 continue
 
-                                #Filter unseeded torrent
+                                # Filter unseeded torrent
                             if seeders < self.minseed or leechers < self.minleech:
                                 if mode != 'RSS':
                                     logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
+                                continue
+
+                            if seeders >= 32768 or leechers >= 32768:
                                 continue
 
                             item = title, download_url, size, seeders, leechers
@@ -141,18 +143,35 @@ class BitSoupProvider(generic.TorrentProvider):
 
                             items[mode].append(item)
 
-                except Exception, e:
+                except Exception:
                     logger.log(u"Failed parsing provider. Traceback: %s" % traceback.format_exc(), logger.WARNING)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
+
+    def _convertSize(self, sizeString):
+        size = sizeString[:-2].strip()
+        modifier = sizeString[-2:].upper()
+        try:
+            size = float(size)
+            if modifier in 'KB':
+                size *= 1024 ** 1
+            elif modifier in 'MB':
+                size *= 1024 ** 2
+            elif modifier in 'GB':
+                size *= 1024 ** 3
+            elif modifier in 'TB':
+                size *= 1024 ** 4
+        except Exception:
+            size = -1
+        return long(size)
 
 
 class BitSoupCache(tvcache.TVCache):
@@ -165,7 +184,7 @@ class BitSoupCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_strings = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_strings)}
+        return {'entries': self.provider.search(search_strings)}
 
 
 provider = BitSoupProvider()

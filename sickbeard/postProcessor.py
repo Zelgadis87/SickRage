@@ -1,6 +1,7 @@
+# coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: https://sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # This file is part of SickRage.
 #
@@ -16,7 +17,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
-
 
 import glob
 import fnmatch
@@ -36,9 +36,12 @@ from sickbeard import notifiers
 from sickbeard import show_name_helpers
 from sickbeard import failed_history
 from sickbeard.name_parser.parser import NameParser, InvalidNameException, InvalidShowException
+from sickrage.helper.common import remove_extension, replace_extension, subtitle_extensions
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import EpisodeNotFoundException, EpisodePostProcessingFailedException, ex
 from sickrage.helper.exceptions import ShowDirectoryNotFoundException
+from sickrage.show.Show import Show
+from babelfish import language_converters
 
 import adba
 from sickbeard.helpers import verify_freespace
@@ -145,7 +148,7 @@ class PostProcessor(object):
                       logger.DEBUG)
             return PostProcessor.DOESNT_EXIST
 
-    def list_associated_files(self, file_path, base_name_only=False, subtitles_only=False, subfolders=False):
+    def list_associated_files(self, file_path, base_name_only=False, subtitles_only=False, subfolders=False):  # pylint: disable=unused-argument
         """
         For a given file path searches for files with the same name but different extension and returns their absolute paths
 
@@ -157,9 +160,9 @@ class PostProcessor(object):
         """
         def recursive_glob(treeroot, pattern):
             results = []
-            for base, _, files in os.walk(treeroot):
+            for base, _, files in ek(os.walk, treeroot.encode(sickbeard.SYS_ENCODING)):
                 goodfiles = fnmatch.filter(files, pattern)
-                results.extend(os.path.join(base, f) for f in goodfiles)
+                results.extend(ek(os.path.join, base, f) for f in goodfiles)
             return results
 
         if not file_path:
@@ -170,50 +173,88 @@ class PostProcessor(object):
 
         file_path_list = []
 
+        extensions_to_delete = []
+
         if subfolders:
             base_name = ek(os.path.basename, globbable_file_path).rpartition('.')[0]
         else:
             base_name = globbable_file_path.rpartition('.')[0]
 
         if not base_name_only:
-            base_name = base_name + '.'
+            base_name += '.'
 
         # don't strip it all and use cwd by accident
         if not base_name:
             return []
 
-        if subfolders: # subfolders are only checked in show folder, so names will always be exactly alike
-            filelist = recursive_glob(ek(os.path.dirname, globbable_file_path), base_name + '*') # just create the list of all files starting with the basename
-        else: # this is called when PP, so we need to do the filename check case-insensitive
+        # subfolders are only checked in show folder, so names will always be exactly alike
+        if subfolders:
+            # just create the list of all files starting with the basename
+            filelist = recursive_glob(ek(os.path.dirname, globbable_file_path), base_name + '*')
+        # this is called when PP, so we need to do the filename check case-insensitive
+        else:
             filelist = []
 
-            checklist = glob.glob(ek(os.path.join, ek(os.path.dirname, globbable_file_path), '*')) # get a list of all the files in the folder
-            for filefound in checklist: # loop through all the files in the folder, and check if they are the same name even when the cases don't match
+            # get a list of all the files in the folder
+            checklist = glob.glob(ek(os.path.join, ek(os.path.dirname, globbable_file_path), '*'))
+            # loop through all the files in the folder, and check if they are the same name even when the cases don't match
+            for filefound in checklist:
+
                 file_name = filefound.rpartition('.')[0]
+                file_extension = filefound.rpartition('.')[2]
+                is_subtitle = None
+
+                if file_extension in subtitle_extensions:
+                    is_subtitle = True
+
                 if not base_name_only:
-                    file_name = file_name + '.'
-                if file_name.lower() == base_name.lower().replace('[[]', '[').replace('[]]', ']'): # if there's no difference in the filename add it to the filelist
+                    new_file_name = file_name + '.'
+                    sub_file_name = file_name.rpartition('.')[0] + '.'
+                else:
+                    new_file_name = file_name
+                    sub_file_name = file_name.rpartition('.')[0]
+
+                if is_subtitle and sub_file_name.lower() == base_name.lower().replace('[[]', '[').replace('[]]', ']'):
+                    language_extensions = tuple('.' + c for c in language_converters['opensubtitles'].codes)
+                    if file_name.lower().endswith(language_extensions) and (len(filefound.rsplit('.', 2)[1]) in [2, 3]):
+                        filelist.append(filefound)
+                    elif file_name.lower().endswith('pt-br') and len(filefound.rsplit('.', 2)[1]) == 5:
+                        filelist.append(filefound)
+                # if there's no difference in the filename add it to the filelist
+                elif new_file_name.lower() == base_name.lower().replace('[[]', '[').replace('[]]', ']'):
                     filelist.append(filefound)
 
         for associated_file_path in filelist:
-            # only add associated to list
+            # Exclude the video file we are post-processing
             if associated_file_path == file_path:
                 continue
-            # only list it if the only non-shared part is the extension or if it is a subtitle
-            if subtitles_only and not associated_file_path[len(associated_file_path) - 3:] in common.subtitleExtensions:
-                continue
+
+            # Exlude non-subtitle files with the 'only subtitles' option (not implemented yet)
+            # if subtitles_only and not associated_file_path[-3:] in subtitle_extensions:
+            #     continue
 
             # Exclude .rar files from associated list
             if re.search(r'(^.+\.(rar|r\d+)$)', associated_file_path):
                 continue
 
+            # Add the extensions that the user doesn't allow to the 'extensions_to_delete' list
+            if sickbeard.MOVE_ASSOCIATED_FILES:
+                allowed_extensions = sickbeard.ALLOWED_EXTENSIONS.split(",")
+                if not associated_file_path[-3:] in allowed_extensions:
+                    if ek(os.path.isfile, associated_file_path):
+                        extensions_to_delete.append(associated_file_path)
+
             if ek(os.path.isfile, associated_file_path):
                 file_path_list.append(associated_file_path)
 
         if file_path_list:
-            self._log(u"Found the following associated files: " + str(file_path_list), logger.DEBUG)
+            self._log(u"Found the following associated files for %s: %s" % (file_path, file_path_list), logger.DEBUG)
+            if extensions_to_delete:
+                # Rebuild the 'file_path_list' list only with the extensions the user allows
+                file_path_list = [associated_file for associated_file in file_path_list if associated_file not in extensions_to_delete]
+                self._delete(extensions_to_delete)
         else:
-            self._log(u"No associated files were during this pass", logger.DEBUG)
+            self._log(u"No associated files for %s were found during this pass" % file_path, logger.DEBUG)
 
         return file_path_list
 
@@ -228,8 +269,13 @@ class PostProcessor(object):
         if not file_path:
             return
 
+        # Check if file_path is a list, if not, make it one
+        if not isinstance(file_path, list):
+            file_list = [file_path]
+        else:
+            file_list = file_path
+
         # figure out which files we want to delete
-        file_list = [file_path]
         if associated_files:
             file_list = file_list + self.list_associated_files(file_path, base_name_only=True, subfolders=True)
 
@@ -297,13 +343,19 @@ class PostProcessor(object):
             cur_extension = cur_file_path[old_base_name_length + 1:]
 
             # check if file have subtitles language
-            if os.path.splitext(cur_extension)[1][1:] in common.subtitleExtensions:
-                cur_lang = os.path.splitext(cur_extension)[0]
-                if cur_lang in sickbeard.subtitles.wantedLanguages():
-                    cur_extension = cur_lang + os.path.splitext(cur_extension)[1]
+            if ek(os.path.splitext, cur_extension)[1][1:] in subtitle_extensions:
+                cur_lang = ek(os.path.splitext, cur_extension)[0]
+                if cur_lang:
+                    cur_lang = cur_lang.lower()
+                    if cur_lang == 'pt-br':
+                        cur_lang = 'pt-BR'
+                    if new_base_name:
+                        cur_extension = cur_lang + ek(os.path.splitext, cur_extension)[1]
+                    else:
+                        cur_extension = cur_extension.rpartition('.')[2]
 
             # replace .nfo with .nfo-orig to avoid conflicts
-            if cur_extension == 'nfo' and sickbeard.NFO_RENAME == True:
+            if cur_extension == 'nfo' and sickbeard.NFO_RENAME is True:
                 cur_extension = 'nfo-orig'
 
             # If new base name then convert name
@@ -311,9 +363,9 @@ class PostProcessor(object):
                 new_file_name = new_base_name + '.' + cur_extension
             # if we're not renaming we still want to change extensions sometimes
             else:
-                new_file_name = helpers.replaceExtension(cur_file_name, cur_extension)
+                new_file_name = replace_extension(cur_file_name, cur_extension)
 
-            if sickbeard.SUBTITLES_DIR and cur_extension in common.subtitleExtensions:
+            if sickbeard.SUBTITLES_DIR and cur_extension[-3:] in subtitle_extensions:
                 subs_new_path = ek(os.path.join, new_path, sickbeard.SUBTITLES_DIR)
                 dir_exists = helpers.makeDir(subs_new_path)
                 if not dir_exists:
@@ -342,7 +394,7 @@ class PostProcessor(object):
             try:
                 helpers.moveFile(cur_file_path, new_file_path)
                 helpers.chmodAsParent(new_file_path)
-            except (IOError, OSError), e:
+            except (IOError, OSError) as e:
                 self._log("Unable to move file " + cur_file_path + " to " + new_file_path + ": " + ex(e), logger.ERROR)
                 raise
 
@@ -365,13 +417,12 @@ class PostProcessor(object):
             try:
                 helpers.copyFile(cur_file_path, new_file_path)
                 helpers.chmodAsParent(new_file_path)
-            except (IOError, OSError), e:
-                logger.log("Unable to copy file " + cur_file_path + " to " + new_file_path + ": " + ex(e), logger.ERROR)
+            except (IOError, OSError) as e:
+                logger.log(u"Unable to copy file " + cur_file_path + " to " + new_file_path + ": " + ex(e), logger.ERROR)
                 raise
 
         self._combined_file_operation(file_path, new_path, new_base_name, associated_files, action=_int_copy,
                                       subtitles=subtitles)
-
 
     def _hardlink(self, file_path, new_path, new_base_name, associated_files=False, subtitles=False):
         """
@@ -389,7 +440,7 @@ class PostProcessor(object):
             try:
                 helpers.hardlinkFile(cur_file_path, new_file_path)
                 helpers.chmodAsParent(new_file_path)
-            except (IOError, OSError), e:
+            except (IOError, OSError) as e:
                 self._log("Unable to link file " + cur_file_path + " to " + new_file_path + ": " + ex(e), logger.ERROR)
                 raise
 
@@ -411,7 +462,7 @@ class PostProcessor(object):
             try:
                 helpers.moveAndSymlinkFile(cur_file_path, new_file_path)
                 helpers.chmodAsParent(new_file_path)
-            except (IOError, OSError), e:
+            except (IOError, OSError) as e:
                 self._log("Unable to link file " + cur_file_path + " to " + new_file_path + ": " + ex(e), logger.ERROR)
                 raise
 
@@ -444,8 +495,8 @@ class PostProcessor(object):
         # search the database for a possible match and return immediately if we find one
         myDB = db.DBConnection()
         for curName in names:
-            search_name = re.sub(r"[\.\-\ ]", "_", curName)
-            sql_results = myDB.select("SELECT * FROM history WHERE resource LIKE ?", [search_name])
+            search_name = re.sub(r"[\.\- ]", "_", curName)
+            sql_results = myDB.select("SELECT showid, season, quality, version, resource FROM history WHERE resource LIKE ? AND (action % 100 = 4 OR action % 100 = 6)", [search_name])
 
             if len(sql_results) == 0:
                 continue
@@ -458,12 +509,15 @@ class PostProcessor(object):
             if quality == common.Quality.UNKNOWN:
                 quality = None
 
-            show = helpers.findCertainShow(sickbeard.showList, indexer_id)
+            show = Show.find(sickbeard.showList, indexer_id)
 
             self.in_history = True
             self.version = version
             to_return = (show, season, [], quality, version)
-            self._log("Found result in history: " + str(to_return), logger.DEBUG)
+
+            qual_str = common.Quality.qualityStrings[quality] if quality is not None else quality
+            self._log("Found result in history for %s - Season: %s - Quality: %s - Version: %s" 
+                % (show.name if show else "UNDEFINED", season, qual_str, version), logger.DEBUG)
 
             return to_return
 
@@ -480,15 +534,15 @@ class PostProcessor(object):
 
         # remember whether it's a proper
         if parse_result.extra_info:
-            self.is_proper = re.search(r'(^|[\. _-])(proper|repack)([\. _-]|$)', parse_result.extra_info, re.I) != None
+            self.is_proper = re.search(r'(^|[\. _-])(proper|repack)([\. _-]|$)', parse_result.extra_info, re.I) is not None
 
         # if the result is complete then remember that for later
         # if the result is complete then set release name
-        if parse_result.series_name and ((parse_result.season_number is not None and parse_result.episode_numbers)
-                                         or parse_result.air_date) and parse_result.release_group:
+        if parse_result.series_name and ((parse_result.season_number is not None and parse_result.episode_numbers) or
+                                         parse_result.air_date) and parse_result.release_group:
 
             if not self.release_name:
-                self.release_name = helpers.remove_non_release_groups(helpers.remove_extension(ek(os.path.basename, parse_result.original_name)))
+                self.release_name = helpers.remove_non_release_groups(remove_extension(ek(os.path.basename, parse_result.original_name)))
 
         else:
             logger.log(u"Parse result not sufficient (all following have to be set). will not save release name",
@@ -514,9 +568,9 @@ class PostProcessor(object):
         if not name:
             return to_return
 
-        logger.log(u"Analyzing name " + repr(name), logger.DEBUG)
+        logger.log(u"Analyzing name " + name, logger.DEBUG)
 
-        name = helpers.remove_non_release_groups(helpers.remove_extension(name))
+        name = helpers.remove_non_release_groups(remove_extension(name))
 
         # parse the name to break it into show name, season, and episode
         np = NameParser(True, tryIndexers=True)
@@ -564,7 +618,7 @@ class PostProcessor(object):
             self._log(u"Adding the file to the anidb mylist", logger.DEBUG)
             try:
                 self.anidbEpisode.add_to_mylist(status=1)  # status = 1 sets the status of the file to "internal HDD"
-            except Exception, e:
+            except Exception as e:
                 self._log(u"exception msg: " + str(e))
 
     def _find_info(self):
@@ -602,7 +656,7 @@ class PostProcessor(object):
 
             try:
                 (cur_show, cur_season, cur_episodes, cur_quality, cur_version) = cur_attempt()
-            except (InvalidNameException, InvalidShowException), e:
+            except (InvalidNameException, InvalidShowException) as e:
                 logger.log(u"Unable to parse, skipping: " + ex(e), logger.DEBUG)
                 continue
 
@@ -618,7 +672,7 @@ class PostProcessor(object):
             if cur_version is not None:
                 version = cur_version
 
-            if cur_season != None:
+            if cur_season is not None:
                 season = cur_season
             if cur_episodes:
                 episodes = cur_episodes
@@ -628,7 +682,14 @@ class PostProcessor(object):
                 self._log(
                     u"Looks like this is an air-by-date or sports show, attempting to convert the date to season/episode",
                     logger.DEBUG)
-                airdate = episodes[0].toordinal()
+
+                try:   
+                    airdate = episodes[0].toordinal()
+                except AttributeError:
+                    self._log(u"Could not convert to a valid airdate: %s" % episodes[0], logger.DEBUG)
+                    episodes = []
+                    continue
+
                 myDB = db.DBConnection()
                 # Ignore season 0 when searching for episode(Conflict between special and regular episode, same air date)
                 sql_result = myDB.select(
@@ -636,16 +697,16 @@ class PostProcessor(object):
                     [show.indexerid, show.indexer, airdate])
 
                 if sql_result:
-                    season = int(sql_result[0][0])
-                    episodes = [int(sql_result[0][1])]
+                    season = int(sql_result[0]['season'])
+                    episodes = [int(sql_result[0]['episode'])]
                 else:
                     # Found no result, try with season 0
                     sql_result = myDB.select(
                         "SELECT season, episode FROM tv_episodes WHERE showid = ? and indexer = ? and airdate = ?",
                         [show.indexerid, show.indexer, airdate])
                     if sql_result:
-                        season = int(sql_result[0][0])
-                        episodes = [int(sql_result[0][1])]
+                        season = int(sql_result[0]['season'])
+                        episodes = [int(sql_result[0]['episode'])]
                     else:
                         self._log(
                             u"Unable to find episode with date " +
@@ -655,21 +716,21 @@ class PostProcessor(object):
                         continue
 
             # if there's no season then we can hopefully just use 1 automatically
-            elif season == None and show:
+            elif season is None and show:
                 myDB = db.DBConnection()
                 numseasonsSQlResult = myDB.select(
-                    "SELECT COUNT(DISTINCT season) as numseasons FROM tv_episodes WHERE showid = ? and indexer = ? and season != 0",
+                    "SELECT COUNT(DISTINCT season) FROM tv_episodes WHERE showid = ? and indexer = ? and season != 0",
                     [show.indexerid, show.indexer])
-                if int(numseasonsSQlResult[0][0]) == 1 and season == None:
+                if int(numseasonsSQlResult[0][0]) == 1 and season is None:
                     self._log(
                         u"Don't have a season number, but this show appears to only have 1 season, setting season number to 1...",
                         logger.DEBUG)
                     season = 1
 
             if show and season and episodes:
-                return (show, season, episodes, quality, version)
+                return show, season, episodes, quality, version
 
-        return (show, season, episodes, quality, version)
+        return show, season, episodes, quality, version
 
     def _get_ep_obj(self, show, season, episodes):
         """
@@ -692,12 +753,12 @@ class PostProcessor(object):
                 curEp = show.getEpisode(season, cur_episode)
                 if not curEp:
                     raise EpisodeNotFoundException()
-            except EpisodeNotFoundException, e:
+            except EpisodeNotFoundException as e:
                 self._log(u"Unable to create episode: " + ex(e), logger.DEBUG)
                 raise EpisodePostProcessingFailedException()
 
             # associate all the episodes together under a single root episode
-            if root_ep == None:
+            if root_ep is None:
                 root_ep = curEp
                 root_ep.relatedEps = []
             elif curEp not in root_ep.relatedEps:
@@ -747,7 +808,7 @@ class PostProcessor(object):
                 return ep_quality
 
         # Try getting quality from the episode (snatched) status
-        if ep_obj.status in common.Quality.SNATCHED + common.Quality.SNATCHED_PROPER  + common.Quality.SNATCHED_BEST:
+        if ep_obj.status in common.Quality.SNATCHED + common.Quality.SNATCHED_PROPER + common.Quality.SNATCHED_BEST:
             _, ep_quality = common.Quality.splitCompositeStatus(ep_obj.status)  # @UnusedVariable
             if ep_quality != common.Quality.UNKNOWN:
                 self._log(
@@ -791,10 +852,10 @@ class PostProcessor(object):
                 out, _ = p.communicate()  # @UnusedVariable
                 self._log(u"Script result: " + str(out), logger.DEBUG)
 
-            except OSError, e:
+            except OSError as e:
                 self._log(u"Unable to run extra_script: " + ex(e))
 
-            except Exception, e:
+            except Exception as e:
                 self._log(u"Unable to run extra_script: " + ex(e))
 
     def _is_priority(self, ep_obj, new_ep_quality):
@@ -875,7 +936,7 @@ class PostProcessor(object):
         if not show:
             self._log(u"This show isn't in your list, you need to add it to SR before post-processing an episode")
             raise EpisodePostProcessingFailedException()
-        elif season == None or not episodes:
+        elif season is None or not episodes:
             self._log(u"Not enough information to determine what episode this is. Quitting post-processing")
             return False
 
@@ -891,7 +952,7 @@ class PostProcessor(object):
         else:
             new_ep_quality = self._get_quality(ep_obj)
 
-        logger.log(u"Quality of the episode we're processing: %s" % new_ep_quality, logger.DEBUG)
+        logger.log(u"Quality of the episode we're processing: %s" % common.Quality.qualityStrings[new_ep_quality], logger.DEBUG)
 
         # see if this is a priority download (is it snatched, in history, PROPER, or BEST)
         priority_download = self._is_priority(ep_obj, new_ep_quality)
@@ -908,28 +969,32 @@ class PostProcessor(object):
         # check for an existing file
         existing_file_status = self._checkForExistingFile(ep_obj.location)
 
-        # if it's not priority then we don't want to replace smaller files in case it was a mistake
         if not priority_download:
-
-            # Not a priority and the quality is lower than what we already have
-            if (new_ep_quality < old_ep_quality and old_ep_quality != common.Quality.UNKNOWN) and not existing_file_status == PostProcessor.DOESNT_EXIST:
-                self._log(u"File exists and new file quality is lower than existing, marking it unsafe to replace")
-                return False
-
-            # if there's an existing file that we don't want to replace stop here
-            if existing_file_status == PostProcessor.EXISTS_LARGER:
-                if self.is_proper:
-                    self._log(
-                        u"File exists and new file is smaller, new file is a proper/repack, marking it safe to replace")
-                    return True
-
-                else:
-                    self._log(u"File exists and new file is smaller, marking it unsafe to replace")
-                    return False
-
-            elif existing_file_status == PostProcessor.EXISTS_SAME:
+            if existing_file_status == PostProcessor.EXISTS_SAME:
                 self._log(u"File exists and new file is same size, marking it unsafe to replace")
                 return False
+
+            if new_ep_quality <= old_ep_quality != common.Quality.UNKNOWN and existing_file_status != PostProcessor.DOESNT_EXIST:
+                if self.is_proper and new_ep_quality == old_ep_quality:
+                    self._log(u"New file is a proper/repack, marking it safe to replace")
+                else:
+                    _, preferred_qualities = common.Quality.splitQuality(int(show.quality))
+                    if new_ep_quality not in preferred_qualities:
+                        self._log(u"File exists and new file quality is not in a preferred quality list, marking it unsafe to replace")
+                        return False
+
+            # Check if the processed file season is already in our indexer. If not, the file is most probably mislabled/fake and will be skipped
+            # Only proceed if the file season is > 0
+            if int(ep_obj.season) > 0:
+                myDB = db.DBConnection()
+                max_season = myDB.select(
+                    "SELECT MAX(season) FROM tv_episodes WHERE showid = ? and indexer = ?", [show.indexerid, show.indexer])
+
+                # If the file season (ep_obj.season) is bigger than the indexer season (max_season[0][0]), skip the file
+                if int(ep_obj.season) > int(max_season[0][0]):
+                    self._log(u"File has season %s, while the indexer is on season %s. The file may be incorrectly labeled or fake, aborting."
+                              % (str(ep_obj.season), str(max_season[0][0])))
+                    return False
 
         # if the file is priority then we're going to replace it even if it exists
         else:
@@ -938,12 +1003,11 @@ class PostProcessor(object):
 
         # try to find out if we have enough space to perform the copy or move action.
         if not helpers.isFileLocked(self.file_path, False):
-            if not verify_freespace(self.file_path, ep_obj.show._location, [ep_obj] + ep_obj.relatedEps):
+            if not verify_freespace(self.file_path, ep_obj.show._location, [ep_obj] + ep_obj.relatedEps):  # pylint: disable=protected-access
                 self._log("Not enough space to continue PP, exiting", logger.WARNING)
                 return False
         else:
             self._log("Unable to determine needed filespace as the source file is locked for access")
-
 
         # delete the existing file (and company)
         for cur_ep in [ep_obj] + ep_obj.relatedEps:
@@ -952,7 +1016,7 @@ class PostProcessor(object):
 
                 # clean up any left over folders
                 if cur_ep.location:
-                    helpers.delete_empty_folders(ek(os.path.dirname, cur_ep.location), keep_dir=ep_obj.show._location)
+                    helpers.delete_empty_folders(ek(os.path.dirname, cur_ep.location), keep_dir=ep_obj.show._location)  # pylint: disable=protected-access
             except (OSError, IOError):
                 raise EpisodePostProcessingFailedException("Unable to delete the existing files")
 
@@ -961,16 +1025,16 @@ class PostProcessor(object):
             #    curEp.status = common.Quality.compositeStatus(common.SNATCHED, new_ep_quality)
 
         # if the show directory doesn't exist then make it if allowed
-        if not ek(os.path.isdir, ep_obj.show._location) and sickbeard.CREATE_MISSING_SHOW_DIRS:
+        if not ek(os.path.isdir, ep_obj.show._location) and sickbeard.CREATE_MISSING_SHOW_DIRS:  # pylint: disable=protected-access
             self._log(u"Show directory doesn't exist, creating it", logger.DEBUG)
             try:
-                ek(os.mkdir, ep_obj.show._location)
-                helpers.chmodAsParent(ep_obj.show._location)
+                ek(os.mkdir, ep_obj.show._location)  # pylint: disable=protected-access
+                helpers.chmodAsParent(ep_obj.show._location)  # pylint: disable=protected-access
 
                 # do the library update for synoindex
-                notifiers.synoindex_notifier.addFolder(ep_obj.show._location)
+                notifiers.synoindex_notifier.addFolder(ep_obj.show._location)  # pylint: disable=protected-access
             except (OSError, IOError):
-                raise EpisodePostProcessingFailedException("Unable to create the show directory: " + ep_obj.show._location)
+                raise EpisodePostProcessingFailedException("Unable to create the show directory: " + ep_obj.show._location)  # pylint: disable=protected-access
 
             # get metadata for the show (but not episode because it hasn't been fully processed)
             ep_obj.show.writeMetadata(True)
@@ -984,13 +1048,14 @@ class PostProcessor(object):
                 if self.release_name:
                     self._log("Found release name " + self.release_name, logger.DEBUG)
                     cur_ep.release_name = self.release_name
+                elif self.file_name:
+                    # If we can't get the release name we expect, save the original release name instead
+                    self._log("Using original release name " + self.file_name, logger.DEBUG)
+                    cur_ep.release_name = self.file_name
                 else:
                     cur_ep.release_name = ""
 
-                if ep_obj.status in common.Quality.SNATCHED_BEST:
-                    cur_ep.status = common.Quality.compositeStatus(common.ARCHIVED, new_ep_quality)
-                else:
-                    cur_ep.status = common.Quality.compositeStatus(common.DOWNLOADED, new_ep_quality)
+                cur_ep.status = common.Quality.compositeStatus(common.DOWNLOADED, new_ep_quality)
 
                 cur_ep.subtitles = u''
 
@@ -1078,7 +1143,7 @@ class PostProcessor(object):
                 with cur_ep.lock:
                     cur_ep.location = ek(os.path.join, dest_path, new_file_name)
                     cur_ep.refreshSubtitles()
-                    cur_ep.downloadSubtitles(force=True)
+                    cur_ep.download_subtitles(force=True)
 
         # now that processing has finished, we can put the info in the DB. If we do it earlier, then when processing fails, it won't try again.
         if len(sql_l) > 0:
@@ -1103,15 +1168,19 @@ class PostProcessor(object):
                     cur_ep.airdateModifyStamp()
 
         # generate nfo/tbn
-        ep_obj.createMetaFiles()
+        try:
+            ep_obj.createMetaFiles()
+        except Exception:
+            logger.log(u"Could not create/update meta files. Continuing with postProcessing...")
+
 
         # log it to history
         history.logDownload(ep_obj, self.file_path, new_ep_quality, self.release_group, new_ep_version)
 
-        #If any notification fails, don't stop postProcessor
+        # If any notification fails, don't stop postProcessor
         try:
             # send notifications
-            notifiers.notify_download(ep_obj._format_pattern('%SN - %Sx%0E - %EN - %QN'))
+            notifiers.notify_download(ep_obj._format_pattern('%SN - %Sx%0E - %EN - %QN'))  # pylint: disable=protected-access
 
             # do the library update for KODI
             notifiers.kodi_notifier.update_library(ep_obj.show.name)

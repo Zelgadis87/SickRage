@@ -50,6 +50,15 @@
             </label>
         </div>
 
+        <div class="field-pair">
+            <label for="stay_ahead" class="clearfix">
+                <span class="component-title">How many episodes to get ahead of the latest one:</span>
+                <span class="component-desc">
+                    <input class="form-control form-control-inline input-sm" type="number" min="0" name="stay_ahead" id="stay_ahead" value="${sickbeard.STAY_AHEAD_DEFAULT}" style="width: 100px;" />
+                </span>
+            </label>
+        </div>
+
 % if enable_anime_options:
         <div class="field-pair alt">
             <label for="anime" class="clearfix">
@@ -72,19 +81,7 @@
             </label>
         </div>
 
-        <div class="field-pair alt">
-            <label for="archive" class="clearfix">
-                <span class="component-title">Archive first match</span>
-                <span class="component-desc">
-                    <input type="checkbox" name="archive" id="archive" ${('', 'checked="checked"')[bool(sickbeard.ARCHIVE_DEFAULT)]} />
-                    <p>Archive episodes after downloading first match?</p>
-                </span>
-            </label>
-        </div>
-
-        <% qualities = Quality.splitQuality(sickbeard.QUALITY_DEFAULT) %>
-        <% anyQualities = qualities[0] %>
-        <% bestQualities = qualities[1] %>
+        <% anyQualities, bestQualities = Quality.splitQuality(sickbeard.QUALITY_DEFAULT) %>
         <%include file="/inc_qualityChooser.mako"/>
 
         <br>

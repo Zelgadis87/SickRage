@@ -1,7 +1,8 @@
+# coding=utf-8
 # This file is part of SickRage.
 #
-# URL: https://www.sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # SickRage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,12 +22,11 @@ import sickbeard
 from datetime import date
 from sickbeard.common import Quality, SKIPPED, WANTED
 from sickbeard.db import DBConnection
-from sickbeard.helpers import findCertainShow
 from sickrage.helper.exceptions import CantRefreshShowException, CantRemoveShowException, ex
 from sickrage.helper.exceptions import MultipleShowObjectsException
 
 
-class Show:
+class Show(object):
     def __init__(self):
         pass
 
@@ -46,12 +46,37 @@ class Show:
         if error is not None:
             return error, show
 
-        try:
-            sickbeard.showQueueScheduler.action.removeShow(show, bool(remove_files))
-        except CantRemoveShowException as exception:
-            return ex(exception), show
+        if show:
+            try:
+                sickbeard.showQueueScheduler.action.removeShow(show, bool(remove_files))
+            except CantRemoveShowException as exception:
+                return ex(exception), show
 
         return None, show
+
+    @staticmethod
+    def find(shows, indexer_id):
+        """
+        Find a show by its indexer id in the provided list of shows
+        :param shows: The list of shows to search in
+        :param indexer_id: The indexer id of the desired show
+        :return: The desired show if found, ``None`` if not found
+        :throw: ``MultipleShowObjectsException`` if multiple shows match the provided ``indexer_id``
+        """
+
+        if indexer_id is None or shows is None or len(shows) == 0:
+            return None
+
+        indexer_ids = [indexer_id] if not isinstance(indexer_id, list) else indexer_id
+        results = [show for show in shows if show.indexerid in indexer_ids]
+
+        if len(results) == 0:
+            return None
+
+        if len(results) == 1:
+            return results[0]
+
+        raise MultipleShowObjectsException()
 
     @staticmethod
     def overall_stats():
@@ -60,7 +85,7 @@ class Show:
         today = str(date.today().toordinal())
 
         downloaded_status = Quality.DOWNLOADED + Quality.ARCHIVED
-        snatched_status = Quality.SNATCHED + Quality.SNATCHED_PROPER
+        snatched_status = Quality.SNATCHED + Quality.SNATCHED_PROPER + Quality.SNATCHED_BEST
         total_status = [SKIPPED, WANTED]
 
         results = db.select(
@@ -152,11 +177,13 @@ class Show:
          - the show object corresponding to ``indexer_id`` if it exists, ``None`` otherwise
         """
 
-        if indexer_id is None:
+        try:
+            indexer_id = int(indexer_id)
+        except (TypeError, ValueError):
             return 'Invalid show ID', None
 
         try:
-            show = findCertainShow(sickbeard.showList, int(indexer_id))
+            show = Show.find(sickbeard.showList, indexer_id)
         except MultipleShowObjectsException:
             return 'Unable to find the specified show', None
 

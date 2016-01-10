@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Mr_Orange <mr_orange@hotmail.it>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -16,22 +17,20 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-
 import re
+import posixpath  # Must use posixpath
 from urllib import urlencode
-
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard.providers import generic
 from sickbeard.common import USER_AGENT
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class ThePirateBayProvider(generic.TorrentProvider):
+class ThePirateBayProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "ThePirateBay")
+        TorrentProvider.__init__(self, "ThePirateBay")
 
-        self.supportsBacklog = True
         self.public = True
 
         self.ratio = None
@@ -42,17 +41,19 @@ class ThePirateBayProvider(generic.TorrentProvider):
         self.cache = ThePirateBayCache(self)
 
         self.urls = {
-            'base_url': 'https://pirateproxy.la/',
-            'search': 'https://pirateproxy.la/s/',
-            'rss': 'https://pirateproxy.la/tv/latest'
+            'base_url': 'https://thepiratebay.ms/',
+            'search': 'https://thepiratebay.ms/s/',
+            'rss': 'https://thepiratebay.ms/tv/latest'
         }
 
         self.url = self.urls['base_url']
+        self.custom_url = None
+
         self.headers.update({'User-Agent': USER_AGENT})
 
         """
         205 = SD, 208 = HD, 200 = All Videos
-        https://thepiratebay.gd/s/?q=Game of Thrones&type=search&orderby=7&page=0&category=200
+        https://pirateproxy.pl/s/?q=Game of Thrones&type=search&orderby=7&page=0&category=200
         """
         self.search_params = {
             'q': '',
@@ -62,12 +63,9 @@ class ThePirateBayProvider(generic.TorrentProvider):
             'category': 200
         }
 
-        self.re_title_url = r'/torrent/(?P<id>\d+)/(?P<title>.*?)//1".+?(?P<url>magnet.*?)//1".+?Size (?P<size>[\d\.]*&nbsp;[TGKMiB]{2,3}).+?(?P<seeders>\d+)</td>.+?(?P<leechers>\d+)</td>'
+        self.re_title_url = r'/torrent/(?P<id>\d+)/(?P<title>.*?)".+?(?P<url>magnet.*?)".+?Size (?P<size>[\d\.]*&nbsp;[TGKMiB]{2,3}).+?(?P<seeders>\d+)</td>.+?(?P<leechers>\d+)</td>'
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
@@ -82,18 +80,20 @@ class ThePirateBayProvider(generic.TorrentProvider):
                     logger.log(u"Search string: " + search_string, logger.DEBUG)
 
                 searchURL = self.urls[('search', 'rss')[mode == 'RSS']] + '?' + urlencode(self.search_params)
+                if self.custom_url:
+                    searchURL = posixpath.join(self.custom_url, searchURL.split(self.url)[1].lstrip('/'))  # Must use posixpath
+
                 logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
-                data = self.getURL(searchURL)
-                #data = self.getURL(self.urls[('search', 'rss')[mode == 'RSS']], params=self.search_params)
+                data = self.get_url(searchURL)
                 if not data:
+                    logger.log(u'URL did not return data, maybe try a custom url, or a different one', logger.DEBUG)
                     continue
 
-                re_title_url = self.proxy._buildRE(self.re_title_url).replace('&amp;f=norefer', '')
-                matches = re.compile(re_title_url, re.DOTALL).finditer(data)
+                matches = re.compile(self.re_title_url, re.DOTALL).finditer(data)
                 for torrent in matches:
                     title = torrent.group('title')
                     download_url = torrent.group('url')
-                    #id = int(torrent.group('id'))
+                    # id = int(torrent.group('id'))
                     size = self._convertSize(torrent.group('size'))
                     seeders = int(torrent.group('seeders'))
                     leechers = int(torrent.group('leechers'))
@@ -101,13 +101,13 @@ class ThePirateBayProvider(generic.TorrentProvider):
                     if not all([title, download_url]):
                         continue
 
-                    #Filter unseeded torrent
+                    # Filter unseeded torrent
                     if seeders < self.minseed or leechers < self.minleech:
                         if mode != 'RSS':
                             logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
                         continue
 
-                    #Accept Torrent only from Good People for every Episode Search
+                    # Accept Torrent only from Good People for every Episode Search
                     if self.confirmed and re.search(r'(VIP|Trusted|Helper|Moderator)', torrent.group(0)) is None:
                         if mode != 'RSS':
                             logger.log(u"Found result %s but that doesn't seem like a trusted result so I'm ignoring it" % title, logger.DEBUG)
@@ -119,7 +119,7 @@ class ThePirateBayProvider(generic.TorrentProvider):
 
                     items[mode].append(item)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
@@ -130,16 +130,16 @@ class ThePirateBayProvider(generic.TorrentProvider):
         size, modifier = size.split('&nbsp;')
         size = float(size)
         if modifier in 'KiB':
-            size = size * 1024
+            size *= 1024 ** 1
         elif modifier in 'MiB':
-            size = size * 1024**2
+            size *= 1024 ** 2
         elif modifier in 'GiB':
-            size = size * 1024**3
+            size *= 1024 ** 3
         elif modifier in 'TiB':
-            size = size * 1024**4
-        return size
+            size *= 1024 ** 4
+        return long(size)
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -153,6 +153,6 @@ class ThePirateBayCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_params = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_params)}
+        return {'entries': self.provider.search(search_params)}
 
 provider = ThePirateBayProvider()

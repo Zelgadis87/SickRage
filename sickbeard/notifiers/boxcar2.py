@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Rafael Silva <rpluto@gmail.com>
 # Author: Marvin Pinto <me@marvinp.ca>
 # Author: Dennis Lutter <lad1337@gmail.com>
@@ -18,7 +20,8 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-import urllib, urllib2
+import urllib
+import urllib2
 
 import sickbeard
 
@@ -29,7 +32,7 @@ from sickrage.helper.exceptions import ex
 API_URL = "https://new.boxcar.io/api/notifications"
 
 
-class Boxcar2Notifier:
+class Boxcar2Notifier(object):
     def test_notify(self, accesstoken, title="SickRage : Test"):
         return self._sendBoxcar2("This is a test notification from SickRage", title, accesstoken)
 
@@ -45,48 +48,47 @@ class Boxcar2Notifier:
         """
 
         # build up the URL and parameters
-	#more info goes here - https://boxcar.uservoice.com/knowledgebase/articles/306788-how-to-send-your-boxcar-account-a-notification
+        # more info goes here - https://boxcar.uservoice.com/knowledgebase/articles/306788-how-to-send-your-boxcar-account-a-notification
         msg = msg.strip()
         curUrl = API_URL
 
         data = urllib.urlencode({
-                'user_credentials': accesstoken,
-                'notification[title]': "SickRage : " + title + ' : ' + msg,
-                'notification[long_message]': msg,
-                'notification[sound]': "notifier-2"
-            })
+            'user_credentials': accesstoken,
+            'notification[title]': "SickRage : " + title + ' : ' + msg,
+            'notification[long_message]': msg,
+            'notification[sound]': "notifier-2"
+        })
 
         # send the request to boxcar2
         try:
             req = urllib2.Request(curUrl)
-            handle = urllib2.urlopen(req, data,timeout=60)
+            handle = urllib2.urlopen(req, data, timeout=60)
             handle.close()
 
         except Exception as e:
             # if we get an error back that doesn't have an error code then who knows what's really happening
             if not hasattr(e, 'code'):
-                logger.log("Boxcar2 notification failed." + ex(e), logger.ERROR)
+                logger.log(u"Boxcar2 notification failed." + ex(e), logger.ERROR)
                 return False
             else:
-                logger.log("Boxcar2 notification failed. Error code: " + str(e.code), logger.WARNING)
+                logger.log(u"Boxcar2 notification failed. Error code: " + str(e.code), logger.WARNING)
 
             # HTTP status 404
             if e.code == 404:
-                logger.log("Access token is invalid. Check it.", logger.WARNING)
+                logger.log(u"Access token is invalid. Check it.", logger.WARNING)
                 return False
 
             # If you receive an HTTP status code of 400, it is because you failed to send the proper parameters
             elif e.code == 400:
-                logger.log("Wrong data send to boxcar2", logger.ERROR)
+                logger.log(u"Wrong data send to boxcar2", logger.ERROR)
                 return False
 
-        logger.log("Boxcar2 notification successful.", logger.DEBUG)
+        logger.log(u"Boxcar2 notification successful.", logger.DEBUG)
         return True
 
     def notify_snatch(self, ep_name, title=notifyStrings[NOTIFY_SNATCH]):
         if sickbeard.BOXCAR2_NOTIFY_ONSNATCH:
             self._notifyBoxcar2(title, ep_name)
-
 
     def notify_download(self, ep_name, title=notifyStrings[NOTIFY_DOWNLOAD]):
         if sickbeard.BOXCAR2_NOTIFY_ONDOWNLOAD:
@@ -96,11 +98,17 @@ class Boxcar2Notifier:
         if sickbeard.BOXCAR2_NOTIFY_ONSUBTITLEDOWNLOAD:
             self._notifyBoxcar2(title, ep_name + ": " + lang)
 
-    def notify_git_update(self, new_version = "??"):
+    def notify_git_update(self, new_version="??"):
         if sickbeard.USE_BOXCAR2:
-            update_text=notifyStrings[NOTIFY_GIT_UPDATE_TEXT]
-            title=notifyStrings[NOTIFY_GIT_UPDATE]
+            update_text = notifyStrings[NOTIFY_GIT_UPDATE_TEXT]
+            title = notifyStrings[NOTIFY_GIT_UPDATE]
             self._notifyBoxcar2(title, update_text + new_version)
+
+    def notify_login(self, ipaddress=""):
+        if sickbeard.USE_BOXCAR2:
+            update_text = common.notifyStrings[common.NOTIFY_LOGIN_TEXT]
+            title = common.notifyStrings[common.NOTIFY_LOGIN]
+            self._notifyBoxcar2(title, update_text.format(ipaddress))
 
     def _notifyBoxcar2(self, title, message, accesstoken=None):
         """
@@ -112,14 +120,14 @@ class Boxcar2Notifier:
         """
 
         if not sickbeard.USE_BOXCAR2:
-            logger.log("Notification for Boxcar2 not enabled, skipping this notification", logger.DEBUG)
+            logger.log(u"Notification for Boxcar2 not enabled, skipping this notification", logger.DEBUG)
             return False
 
         # if no username was given then use the one from the config
         if not accesstoken:
             accesstoken = sickbeard.BOXCAR2_ACCESSTOKEN
 
-        logger.log("Sending notification for " + message, logger.DEBUG)
+        logger.log(u"Sending notification for " + message, logger.DEBUG)
 
         self._sendBoxcar2(message, title, accesstoken)
         return True

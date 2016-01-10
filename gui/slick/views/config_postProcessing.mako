@@ -1,20 +1,16 @@
 <%inherit file="/layouts/main.mako"/>
 <%!
     import os.path
+    import datetime
     import sickbeard
     from sickbeard.common import SKIPPED, WANTED, UNAIRED, ARCHIVED, IGNORED, SNATCHED, SNATCHED_PROPER, SNATCHED_BEST, FAILED
-    from sickbeard.common import Quality, qualityPresets, statusStrings, qualityPresetStrings, cpu_presets, multiEpStrings
+    from sickbeard.common import Quality, qualityPresets, statusStrings, qualityPresetStrings, cpu_presets, MULTI_EP_STRINGS
     from sickbeard import config
     from sickbeard import metadata
     from sickbeard.metadata.generic import GenericMetadata
     from sickbeard import naming
+    from sickrage.helper.encoding import ek
 %>
-
-<%block name="scripts">
-<script type="text/javascript" src="${srRoot}/js/configPostProcessing.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/config.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/new/home.js"></script>
-</%block>
 <%block name="content">
 <div id="content960">
 % if not header is UNDEFINED:
@@ -23,17 +19,15 @@
     <h1 class="title">${title}</h1>
 % endif
 <div id="config">
-<div id="config-content">
-
-<form id="configForm" action="savePostProcessing" method="post">
-
+    <div id="config-content">
+        <form id="configForm" action="savePostProcessing" method="post">
             <div id="config-components">
                 <ul>
-                    <li><a href="#core-component-group1">Post-Processing</a></li>
-                    <li><a href="#core-component-group2">Episode Naming</a></li>
-                    <li><a href="#core-component-group3">Metadata</a></li>
+                    <li><a href="#post-processing">Post-Processing</a></li>
+                    <li><a href="#episode-naming">Episode Naming</a></li>
+                    <li><a href="#metadata">Metadata</a></li>
                 </ul>
-                <div id="core-component-group1" class="component-group">
+                <div id="post-processing" class="component-group">
                     <div class="component-group-desc">
                         <h3>Post-Processing</h3>
                         <p>Settings that dictate how SickRage should process completed downloads.</p>
@@ -47,13 +41,13 @@
                             </label>
                             <label class="nocheck" for="process_automatically">
                                 <span class="component-title">&nbsp;</span>
-                                <span class="component-desc"><b>NOTE:</b> Do not use if you use an external PostProcesing script</span>
+                                <span class="component-desc"><b>NOTE:</b> Do not use if you use an external Post Processing script</span>
                             </label>
                         </div>
                         <div class="field-pair">
                             <label class="nocheck" for="tv_download_dir">
                                 <span class="component-title">Post Processing Dir</span>
-                                <input type="text" name="tv_download_dir" id="tv_download_dir" value="${sickbeard.TV_DOWNLOAD_DIR}" class="form-control input-sm input350" />
+                                <input type="text" name="tv_download_dir" id="tv_download_dir" value="${sickbeard.TV_DOWNLOAD_DIR}" class="form-control input-sm input350" autocapitalize="off" />
                             </label>
                             <label class="nocheck">
                                 <span class="component-title">&nbsp;</span>
@@ -88,7 +82,7 @@
                         <div class="field-pair">
                             <label class="nocheck">
                                 <span class="component-title">Auto Post-Processing Frequency</span>
-                                <input type="number" min="10" name="autopostprocesser_frequency" id="autopostprocesser_frequency" value="${sickbeard.AUTOPOSTPROCESSER_FREQUENCY}" class="form-control input-sm input75" />
+                                <input type="number" min="10" step="1" name="autopostprocesser_frequency" id="autopostprocesser_frequency" value="${sickbeard.AUTOPOSTPROCESSER_FREQUENCY}" class="form-control input-sm input75" />
                             </label>
                             <label class="nocheck">
                                 <span class="component-title">&nbsp;</span>
@@ -105,11 +99,19 @@
                         <div class="field-pair">
                             <label class="nocheck">
                                 <span class="component-title">Sync File Extensions</span>
-                                <input type="text" name="sync_files" id="sync_files" value="${sickbeard.SYNC_FILES}" class="form-control input-sm input350" />
+                                <input type="text" name="sync_files" id="sync_files" value="${sickbeard.SYNC_FILES}" class="form-control input-sm input350" autocapitalize="off" />
                             </label>
                             <label class="nocheck">
                                 <span class="component-title">&nbsp;</span>
                                 <span class="component-desc">comma seperated list of extensions SickRage ignores when Post Processing</span>
+                            </label>
+                        </div>
+                        <div class="field-pair">
+                            <input type="checkbox" name="postpone_if_no_subs" id="postpone_if_no_subs" ${('', 'checked="checked"')[bool(sickbeard.POSTPONE_IF_NO_SUBS)]}/>
+                            <label for="postpone_if_no_subs">
+                                <span class="component-title">Postpone if no subtitle</span>
+                                <span class="component-desc">Wait to process a file until subtitles are present</span>
+                                <span class="component-desc">Language names are allowed in subtitle filename (en.srt, pt-br.srt, ita.srt, etc.)</span>
                             </label>
                         </div>
                         <div class="field-pair">
@@ -136,8 +138,18 @@
                         <div class="field-pair">
                             <input type="checkbox" name="move_associated_files" id="move_associated_files" ${('', 'checked="checked"')[bool(sickbeard.MOVE_ASSOCIATED_FILES)]}/>
                             <label for="move_associated_files">
-                                <span class="component-title">Move Associated Files</span>
-                                <span class="component-desc">Move srr/srt/sfv/etc files with the episode when processed?</span>
+                                <span class="component-title">Delete associated files</span>
+                                <span class="component-desc">Delete srt/srr/sfv/etc files while post processing?</span>
+                            </label>
+                        </div>
+                        <div class="field-pair">
+                            <label class="nocheck">
+                                <span class="component-title">Keep associated file extensions</span>
+                                <input type="text" name="allowed_extensions" id="allowed_extensions" value="${sickbeard.ALLOWED_EXTENSIONS}" class="form-control input-sm input350" autocapitalize="off" />
+                            </label>
+                            <label class="nocheck">
+                                <span class="component-title">&nbsp;</span>
+                                <span class="component-desc">Comma seperated list of associated file extensions SickRage should keep while post processing. Leaving it empty means all associated files will be deleted</span>
                             </label>
                         </div>
                         <div class="field-pair">
@@ -229,17 +241,17 @@
                         <div class="field-pair">
                             <label class="nocheck">
                                 <span class="component-title">Extra Scripts</span>
-                                <input type="text" name="extra_scripts" value="${'|'.join(sickbeard.EXTRA_SCRIPTS)}" class="form-control input-sm input350" />
+                                <input type="text" name="extra_scripts" value="${'|'.join(sickbeard.EXTRA_SCRIPTS)}" class="form-control input-sm input350" autocapitalize="off" />
                             </label>
                             <label class="nocheck">
                                 <span class="component-title">&nbsp;</span>
-                                <span class="component-desc">See <a href="https://github.com/SiCKRAGETV/sickrage-issues/wiki/Post-Processing#extra-scripts"><font color='red'><b>Wiki</b></font></a> for script arguments description and usage.</span>
+                                <span class="component-desc">See <a href="https://github.com/SickRage/sickrage-issues/wiki/Post-Processing#extra-scripts"><font color='red'><b>Wiki</b></font></a> for script arguments description and usage.</span>
                             </label>
                         </div>
-                        <input type="submit" class="btn config_submitter" value="Save Changes" /><br/>
+                        <input type="submit" class="btn config_submitter" value="Save Changes" /><br>
                     </fieldset>
                 </div><!-- /component-group1 //-->
-                <div id="core-component-group2" class="component-group">
+                <div id="episode-naming" class="component-group">
 
                     <div class="component-group-desc">
                         <h3>Episode Naming</h3>
@@ -247,7 +259,6 @@
                     </div>
 
                     <fieldset class="component-group-list">
-
                         <div class="field-pair">
                             <label class="nocheck" for="name_presets">
                                 <span class="component-title">Name Pattern:</span>
@@ -259,7 +270,7 @@
                                             % if cur_preset == sickbeard.NAMING_PATTERN:
                                                 <% is_custom = False %>
                                             % endif
-                                            <option id="${cur_preset}" ${('', 'selected="selected"')[sickbeard.NAMING_PATTERN == cur_preset]}>${os.path.join(tmp['dir'], tmp['name'])}</option>
+                                            <option id="${cur_preset}" ${('', 'selected="selected"')[sickbeard.NAMING_PATTERN == cur_preset]}>${ek(os.path.join, tmp['dir'], tmp['name'])}</option>
                                         % endfor
                                         <option id="${sickbeard.NAMING_PATTERN}" ${('', 'selected="selected"')[bool(is_custom)]}>Custom...</option>
                                     </select>
@@ -274,13 +285,13 @@
                                         &nbsp;
                                     </span>
                                     <span class="component-desc">
-                                        <input type="text" name="naming_pattern" id="naming_pattern" value="${sickbeard.NAMING_PATTERN}" class="form-control input-sm input350" />
+                                        <input type="text" name="naming_pattern" id="naming_pattern" value="${sickbeard.NAMING_PATTERN}" class="form-control input-sm input350" autocapitalize="off" />
                                         <img src="${srRoot}/images/legend16.png" width="16" height="16" alt="[Toggle Key]" id="show_naming_key" title="Toggle Naming Legend" class="legend" class="legend" />
                                     </span>
                                 </label>
                                 <label class="nocheck">
                                     <span class="component-title">&nbsp;</span>
-                                    <span class="component-desc"><b>NOTE:</b> Don't forget to add quality pattern. Otherwise after post-procesing the episode will have UNKNOWN quality</span>
+                                    <span class="component-desc"><b>NOTE:</b> Don't forget to add quality pattern. Otherwise after post-processing the episode will have UNKNOWN quality</span>
                                  </label>
                             </div>
 
@@ -370,6 +381,36 @@
                                           <td>Episode_Name</td>
                                         </tr>
                                         <tr>
+                                          <td class="align-right"><b>Air Date:</b></td>
+                                          <td>%M</td>
+                                          <td>${datetime.date.today().month}</td>
+                                        </tr>
+                                        <tr class="even">
+                                          <td>&nbsp;</td>
+                                          <td>%D</td>
+                                          <td>${datetime.date.today().day}</td>
+                                        </tr>
+                                        <tr>
+                                          <td>&nbsp;</td>
+                                          <td>%Y</td>
+                                          <td>${datetime.date.today().year}</td>
+                                        </tr>
+                                        <tr>
+                                          <td class="align-right"><b>Post-Processing Date:</b></td>
+                                          <td>%CM</td>
+                                          <td>${datetime.date.today().month}</td>
+                                        </tr>
+                                        <tr class="even">
+                                          <td>&nbsp;</td>
+                                          <td>%CD</td>
+                                          <td>${datetime.date.today().day}</td>
+                                        </tr>
+                                        <tr>
+                                          <td>&nbsp;</td>
+                                          <td>%CY</td>
+                                          <td>${datetime.date.today().year}</td>
+                                        </tr>
+                                        <tr>
                                           <td class="align-right"><b>Quality:</b></td>
                                           <td>%QN</td>
                                           <td>720p BluRay</td>
@@ -416,7 +457,7 @@
                                         </tr>
                                     </tbody>
                                   </table>
-                                  <br/>
+                                  <br>
                             </div>
                         </div>
 
@@ -425,7 +466,7 @@
                                 <span class="component-title">Multi-Episode Style:</span>
                                 <span class="component-desc">
                                     <select id="naming_multi_ep" name="naming_multi_ep" class="form-control input-sm">
-                                    % for cur_multi_ep in sorted(multiEpStrings.iteritems(), key=lambda x: x[1]):
+                                    % for cur_multi_ep in sorted(MULTI_EP_STRINGS.iteritems(), key=lambda x: x[1]):
                                         <option value="${cur_multi_ep[0]}" ${('', 'selected="selected"')[cur_multi_ep[0] == sickbeard.NAMING_MULTI_EP]}>${cur_multi_ep[1]}</option>
                                     % endfor
                                     </select>
@@ -438,7 +479,7 @@
                             <div class="example">
                                 <span class="jumbo" id="naming_example">&nbsp;</span>
                             </div>
-                            <br/>
+                            <br>
                         </div>
 
                         <div id="naming_example_multi_div">
@@ -446,7 +487,7 @@
                             <div class="example">
                                 <span class="jumbo" id="naming_example_multi">&nbsp;</span>
                             </div>
-                            <br/>
+                            <br>
                         </div>
 
                         <div class="field-pair">
@@ -481,7 +522,7 @@
                                                 % if cur_preset == sickbeard.NAMING_ABD_PATTERN:
                                                     <% is_abd_custom = False %>
                                                 % endif
-                                                <option id="${cur_preset}" ${('', 'selected="selected"')[sickbeard.NAMING_ABD_PATTERN == cur_preset]}>${os.path.join(tmp['dir'], tmp['name'])}</option>
+                                                <option id="${cur_preset}" ${('', 'selected="selected"')[sickbeard.NAMING_ABD_PATTERN == cur_preset]}>${ek(os.path.join, tmp['dir'], tmp['name'])}</option>
                                             % endfor
                                             <option id="${sickbeard.NAMING_ABD_PATTERN}" ${('', 'selected="selected"')[bool(is_abd_custom)]}>Custom...</option>
                                         </select>
@@ -496,7 +537,7 @@
                                             &nbsp;
                                         </span>
                                         <span class="component-desc">
-                                            <input type="text" name="naming_abd_pattern" id="naming_abd_pattern" value="${sickbeard.NAMING_ABD_PATTERN}" class="form-control input-sm input350" />
+                                            <input type="text" name="naming_abd_pattern" id="naming_abd_pattern" value="${sickbeard.NAMING_ABD_PATTERN}" class="form-control input-sm input350" autocapitalize="off" />
                                             <img src="${srRoot}/images/legend16.png" width="16" height="16" alt="[Toggle Key]" id="show_naming_abd_key" title="Toggle ABD Naming Legend" class="legend" />
                                         </span>
                                     </label>
@@ -624,7 +665,7 @@
                                             </tr>
                                         </tbody>
                                       </table>
-                                      <br/>
+                                      <br>
                                 </div>
                             </div><!-- /naming_abd_custom -->
 
@@ -633,7 +674,7 @@
                                 <div class="example">
                                     <span class="jumbo" id="naming_abd_example">&nbsp;</span>
                                 </div>
-                                <br/>
+                                <br>
                             </div>
 
                         </div><!-- /naming_abd_different -->
@@ -658,7 +699,7 @@
                                                 % if cur_preset == sickbeard.NAMING_SPORTS_PATTERN:
                                                     <% is_sports_custom = False %>
                                                 % endif
-                                                <option id="${cur_preset}" ${('', 'selected="selected"')[NAMING_SPORTS_PATTERN == cur_preset]}>${os.path.join(tmp['dir'], tmp['name'])}</option>
+                                                <option id="${cur_preset}" ${('', 'selected="selected"')[sickbeard.NAMING_SPORTS_PATTERN == cur_preset]}>${ek(os.path.join, tmp['dir'], tmp['name'])}</option>
                                             % endfor
                                             <option id="${sickbeard.NAMING_SPORTS_PATTERN}" ${('', 'selected="selected"')[bool(is_sports_custom)]}>Custom...</option>
                                         </select>
@@ -673,7 +714,7 @@
                                             &nbsp;
                                         </span>
                                         <span class="component-desc">
-                                            <input type="text" name="naming_sports_pattern" id="naming_sports_pattern" value="${sickbeard.NAMING_SPORTS_PATTERN}" class="form-control input-sm input350" />
+                                            <input type="text" name="naming_sports_pattern" id="naming_sports_pattern" value="${sickbeard.NAMING_SPORTS_PATTERN}" class="form-control input-sm input350" autocapitalize="off" />
                                             <img src="${srRoot}/images/legend16.png" width="16" height="16" alt="[Toggle Key]" id="show_naming_sports_key" title="Toggle Sports Naming Legend" class="legend" />
                                         </span>
                                     </label>
@@ -801,7 +842,7 @@
                                             </tr>
                                         </tbody>
                                       </table>
-                                      <br/>
+                                      <br>
                                 </div>
                             </div><!-- /naming_sports_custom -->
 
@@ -810,7 +851,7 @@
                                 <div class="example">
                                     <span class="jumbo" id="naming_sports_example">&nbsp;</span>
                                 </div>
-                                <br/>
+                                <br>
                             </div>
 
                         </div><!-- /naming_sports_different -->
@@ -836,7 +877,7 @@
                                                 % if cur_preset == sickbeard.NAMING_ANIME_PATTERN:
                                                     <% is_anime_custom = False %>
                                                 % endif
-                                                <option id="${cur_preset}" ${('', 'selected="selected"')[cur_preset == sickbeard.NAMING_ANIME_PATTERN]}>${os.path.join(tmp['dir'], tmp['name'])}</option>
+                                                <option id="${cur_preset}" ${('', 'selected="selected"')[cur_preset == sickbeard.NAMING_ANIME_PATTERN]}>${ek(os.path.join, tmp['dir'], tmp['name'])}</option>
                                             % endfor
                                             <option id="${sickbeard.NAMING_ANIME_PATTERN}" ${('', 'selected="selected"')[bool(is_anime_custom)]}>Custom...</option>
                                         </select>
@@ -851,7 +892,7 @@
                                             &nbsp;
                                         </span>
                                         <span class="component-desc">
-                                            <input type="text" name="naming_anime_pattern" id="naming_anime_pattern" value="${sickbeard.NAMING_ANIME_PATTERN}" class="form-control input-sm input350" />
+                                            <input type="text" name="naming_anime_pattern" id="naming_anime_pattern" value="${sickbeard.NAMING_ANIME_PATTERN}" class="form-control input-sm input350" autocapitalize="off" />
                                             <img src="${srRoot}/images/legend16.png" width="16" height="16" alt="[Toggle Key]" id="show_naming_anime_key" title="Toggle Anime Naming Legend" class="legend" />
                                         </span>
                                     </label>
@@ -974,7 +1015,7 @@
                                             </tr>
                                         </tbody>
                                       </table>
-                                      <br/>
+                                      <br>
                                 </div>
                             </div><!-- /naming_anime_custom -->
 
@@ -983,7 +1024,7 @@
                                     <span class="component-title">Multi-Episode Style:</span>
                                     <span class="component-desc">
                                         <select id="naming_anime_multi_ep" name="naming_anime_multi_ep" class="form-control input-sm">
-                                        % for cur_multi_ep in sorted(multiEpStrings.iteritems(), key=lambda x: x[1]):
+                                        % for cur_multi_ep in sorted(MULTI_EP_STRINGS.iteritems(), key=lambda x: x[1]):
                                             <option value="${cur_multi_ep[0]}" ${('', 'selected="selected" class="selected"')[cur_multi_ep[0] == sickbeard.NAMING_ANIME_MULTI_EP]}>${cur_multi_ep[1]}</option>
                                         % endfor
                                         </select>
@@ -996,7 +1037,7 @@
                                 <div class="example">
                                     <span class="jumbo" id="naming_example_anime">&nbsp;</span>
                                 </div>
-                                <br/>
+                                <br>
                             </div>
 
                             <div id="naming_example_multi_anime_div">
@@ -1004,7 +1045,7 @@
                                 <div class="example">
                                     <span class="jumbo" id="naming_example_multi_anime">&nbsp;</span>
                                 </div>
-                                <br/>
+                                <br>
                             </div>
 
                             <div class="field-pair">
@@ -1045,14 +1086,11 @@
 
                         </div><!-- /naming_anime_different -->
 
-                        <div></div>
-                        <input type="submit" class="btn config_submitter" value="Save Changes" /><br/>
-
+                        <input type="submit" class="btn config_submitter" value="Save Changes" /><br>
                     </fieldset>
                 </div><!-- /component-group2 //-->
 
-                <div id="core-component-group3" class="component-group">
-
+                <div id="metadata" class="component-group">
                     <div class="component-group-desc">
                         <h3>Metadata</h3>
                         <p>The data associated to the data. These are files associated to a TV show in the form of images and text that, when supported, will enhance the viewing experience.</p>
@@ -1112,19 +1150,17 @@
                         </div>
                         % endfor
 
-                        <div class="clearfix"></div><br/>
+                        <div class="clearfix"></div><br>
 
-                        <input type="submit" class="btn config_submitter" value="Save Changes" /><br/>
+                        <input type="submit" class="btn config_submitter" value="Save Changes" /><br>
                     </fieldset>
                 </div><!-- /component-group3 //-->
 
-                <br/>
+                <br>
                 <h6 class="pull-right"><b>All non-absolute folder locations are relative to <span class="path">${sickbeard.DATA_DIR}</span></b> </h6>
                 <input type="submit" class="btn pull-left config_submitter button" value="Save Changes" />
-
         </form>
     </div>
 </div>
-
 <div class="clearfix"></div>
 </%block>

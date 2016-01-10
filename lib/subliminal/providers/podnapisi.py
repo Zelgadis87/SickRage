@@ -18,7 +18,7 @@ from zipfile import ZipFile
 from . import Provider, get_version
 from .. import __version__
 from ..exceptions import ProviderError
-from ..subtitle import Subtitle, fix_line_ending, guess_matches
+from ..subtitle import Subtitle, fix_line_ending, guess_matches, sanitized_string_equal
 from ..video import Episode, Movie
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class PodnapisiSubtitle(Subtitle):
         # episode
         if isinstance(video, Episode):
             # series
-            if video.series and self.title.lower() == video.series.lower():
+            if video.series and sanitized_string_equal(self.title, video.series):
                 matches.add('series')
             # season
             if video.season and self.season == video.season:
@@ -61,7 +61,7 @@ class PodnapisiSubtitle(Subtitle):
         # movie
         elif isinstance(video, Movie):
             # title
-            if video.title and self.title.lower() == video.title.lower():
+            if video.title and sanitized_string_equal(self.title, video.title):
                 matches.add('title')
             # guess
             for release in self.releases:
@@ -76,7 +76,6 @@ class PodnapisiSubtitle(Subtitle):
 class PodnapisiProvider(Provider):
     languages = ({Language('por', 'BR'), Language('srp', script='Latn')} |
                  {Language.fromalpha2(l) for l in language_converters['alpha2'].codes})
-    video_types = (Episode, Movie)
     server_url = 'http://podnapisi.net/subtitles/'
 
     def initialize(self):
@@ -162,7 +161,7 @@ class PodnapisiProvider(Provider):
 
     def download_subtitle(self, subtitle):
         # download as a zip
-        logger.info('Downloading subtitle %r')
+        logger.info('Downloading subtitle %r', subtitle)
         r = self.session.get(self.server_url + subtitle.pid + '/download', params={'container': 'zip'}, timeout=10)
         r.raise_for_status()
 

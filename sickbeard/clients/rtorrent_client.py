@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: jkaberg <joel.kaberg@gmail.com>, based on fuzemans work (https://github.com/RuudBurger/CouchPotatoServer/blob/develop/couchpotato/core/downloaders/rtorrent/main.py)
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -20,7 +21,7 @@ import traceback
 
 import sickbeard
 from sickbeard import logger
-from .generic import GenericClient
+from sickbeard.clients.generic import GenericClient
 from rtorrent import RTorrent
 
 
@@ -38,7 +39,7 @@ class rTorrentAPI(GenericClient):
             return
 
         tp_kwargs = {}
-        if sickbeard.TORRENT_AUTH_TYPE is not 'none':
+        if sickbeard.TORRENT_AUTH_TYPE != 'none':
             tp_kwargs['authtype'] = sickbeard.TORRENT_AUTH_TYPE
 
         if not sickbeard.TORRENT_VERIFY_CERT:
@@ -52,7 +53,6 @@ class rTorrentAPI(GenericClient):
         return self.auth
 
     def _add_torrent_uri(self, result):
-        filedata = None
 
         if not self.auth:
             return False
@@ -82,12 +82,11 @@ class rTorrentAPI(GenericClient):
 
             return True
 
-        except Exception as e:
+        except Exception:
             logger.log(traceback.format_exc(), logger.DEBUG)
             return False
 
     def _add_torrent_file(self, result):
-        filedata = None
 
         if not self.auth:
             return False
@@ -125,7 +124,7 @@ class rTorrentAPI(GenericClient):
 
             return True
 
-        except Exception as e:
+        except Exception:
             logger.log(traceback.format_exc(), logger.DEBUG)
             return False
 

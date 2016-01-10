@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -16,20 +17,18 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-import generic
-
 from sickbeard import logger
 from sickbeard import tvcache
 from sickrage.helper.exceptions import AuthException
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class ShazbatProvider(generic.TorrentProvider):
+class ShazbatProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "Shazbat.tv")
+        TorrentProvider.__init__(self, "Shazbat.tv")
 
-        self.supportsBacklog = False
-
+        self.supports_backlog = False
 
         self.passkey = None
         self.ratio = None
@@ -38,13 +37,10 @@ class ShazbatProvider(generic.TorrentProvider):
         self.cache = ShazbatCache(self)
 
         self.urls = {'base_url': u'http://www.shazbat.tv/',
-                     'website': u'http://www.shazbat.tv/login',}
+                     'website': u'http://www.shazbat.tv/login', }
         self.url = self.urls['website']
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
         if not self.passkey:
             raise AuthException("Your authentication credentials for " + self.name + " are missing, check your config.")
 
@@ -52,13 +48,13 @@ class ShazbatProvider(generic.TorrentProvider):
 
     def _checkAuthFromData(self, data):
         if not self.passkey:
-            self._checkAuth()
+            self._check_auth()
         elif not (data['entries'] and data['feed']):
             logger.log(u"Invalid username or password. Check your settings", logger.WARNING)
 
         return True
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -74,7 +70,7 @@ class ShazbatCache(tvcache.TVCache):
         rss_url = self.provider.urls['base_url'] + 'rss/recent?passkey=' + provider.passkey + '&fname=true'
         logger.log(u"Cache update URL: %s" % rss_url, logger.DEBUG)
 
-        return self.getRSSFeed(rss_url, items=['entries', 'feed'])
+        return self.getRSSFeed(rss_url)
 
     def _checkAuth(self, data):
         return self.provider._checkAuthFromData(data)

@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Idan Gutman
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -23,18 +24,15 @@ import traceback
 
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard.helpers import tryInt
-from sickbeard.providers import generic
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.helper.common import try_int
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
-class FreshOnTVProvider(generic.TorrentProvider):
 
+class FreshOnTVProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "FreshOnTV")
-
-        self.supportsBacklog = True
-
+        TorrentProvider.__init__(self, "FreshOnTV")
 
         self._uid = None
         self._hash = None
@@ -57,17 +55,14 @@ class FreshOnTVProvider(generic.TorrentProvider):
 
         self.cookies = None
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
 
         if not self.username or not self.password:
             logger.log(u"Invalid username or password. Check your settings", logger.WARNING)
 
         return True
 
-    def _doLogin(self):
+    def login(self):
         if any(requests.utils.dict_from_cookiejar(self.session.cookies).values()):
             return True
 
@@ -78,7 +73,7 @@ class FreshOnTVProvider(generic.TorrentProvider):
                             'password': self.password,
                             'login': 'submit'}
 
-            response = self.getURL(self.urls['login'], post_data=login_params, timeout=30)
+            response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
             if not response:
                 logger.log(u"Unable to connect to provider", logger.WARNING)
                 return False
@@ -106,14 +101,14 @@ class FreshOnTVProvider(generic.TorrentProvider):
 
                     return False
 
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_params, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
         freeleech = '3' if self.freeleech else '0'
 
-        if not self._doLogin():
+        if not self.login():
             return results
 
         for mode in search_params.keys():
@@ -124,18 +119,18 @@ class FreshOnTVProvider(generic.TorrentProvider):
                     logger.log(u"Search string: %s " % search_string, logger.DEBUG)
 
                 searchURL = self.urls['search'] % (freeleech, search_string)
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
-                init_html = self.getURL(searchURL)
+                logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
+                init_html = self.get_url(searchURL)
                 max_page_number = 0
 
                 if not init_html:
-                    logger.log("No data returned from provider", logger.DEBUG)
+                    logger.log(u"No data returned from provider", logger.DEBUG)
                     continue
 
                 try:
-                    with BS4Parser(init_html, features=["html5lib", "permissive"]) as init_soup:
+                    with BS4Parser(init_html, 'html5lib') as init_soup:
 
-                        #Check to see if there is more than 1 page of results
+                        # Check to see if there is more than 1 page of results
                         pager = init_soup.find('div', {'class': 'pager'})
                         if pager:
                             page_links = pager.find_all('a', href=True)
@@ -150,27 +145,26 @@ class FreshOnTVProvider(generic.TorrentProvider):
                                     if page_int > max_page_number:
                                         max_page_number = page_int
 
-                        #limit page number to 15 just in case something goes wrong
+                        # limit page number to 15 just in case something goes wrong
                         if max_page_number > 15:
                             max_page_number = 15
-                        #limit RSS search
-                        if max_page_number > 3 and mode is 'RSS':
+                        # limit RSS search
+                        if max_page_number > 3 and mode == 'RSS':
                             max_page_number = 3
-                except:
+                except Exception:
                     logger.log(u"Failed parsing provider. Traceback: %s" % traceback.format_exc(), logger.ERROR)
                     continue
 
-                data_response_list = []
-                data_response_list.append(init_html)
+                data_response_list = [init_html]
 
-                #Freshon starts counting pages from zero, even though it displays numbers from 1
+                # Freshon starts counting pages from zero, even though it displays numbers from 1
                 if max_page_number > 1:
                     for i in range(1, max_page_number):
 
                         time.sleep(1)
                         page_searchURL = searchURL + '&page=' + str(i)
-                        #'.log(u"Search string: " + page_searchURL, logger.DEBUG)
-                        page_html = self.getURL(page_searchURL)
+                        # '.log(u"Search string: " + page_searchURL, logger.DEBUG)
+                        page_html = self.get_url(page_searchURL)
 
                         if not page_html:
                             continue
@@ -181,19 +175,19 @@ class FreshOnTVProvider(generic.TorrentProvider):
 
                     for data_response in data_response_list:
 
-                        with BS4Parser(data_response, features=["html5lib", "permissive"]) as html:
+                        with BS4Parser(data_response, 'html5lib') as html:
 
                             torrent_rows = html.findAll("tr", {"class": re.compile('torrent_[0-9]*')})
 
-                            #Continue only if a Release is found
+                            # Continue only if a Release is found
                             if len(torrent_rows) == 0:
                                 logger.log(u"Data returned from provider does not contain any torrents", logger.DEBUG)
                                 continue
 
                             for individual_torrent in torrent_rows:
 
-                                #skip if torrent has been nuked due to poor quality
-                                if individual_torrent.find('img', alt='Nuked') != None:
+                                # skip if torrent has been nuked due to poor quality
+                                if individual_torrent.find('img', alt='Nuked') is not None:
                                     continue
 
                                 try:
@@ -206,9 +200,9 @@ class FreshOnTVProvider(generic.TorrentProvider):
                                     details_url = individual_torrent.find('a', {'class': 'torrent_name_link'})['href']
                                     torrent_id = int((re.match('.*?([0-9]+)$', details_url).group(1)).strip())
                                     download_url = self.urls['download'] % (str(torrent_id))
-                                    seeders = tryInt(individual_torrent.find('td', {'class': 'table_seeders'}).find('span').text.strip(), 1)
-                                    leechers = tryInt(individual_torrent.find('td', {'class': 'table_leechers'}).find('a').text.strip(), 0)
-                                    #FIXME
+                                    seeders = try_int(individual_torrent.find('td', {'class': 'table_seeders'}).find('span').text.strip(), 1)
+                                    leechers = try_int(individual_torrent.find('td', {'class': 'table_leechers'}).find('a').text.strip(), 0)
+                                    # FIXME
                                     size = -1
                                 except Exception:
                                     continue
@@ -216,7 +210,7 @@ class FreshOnTVProvider(generic.TorrentProvider):
                                 if not all([title, download_url]):
                                     continue
 
-                                #Filter unseeded torrent
+                                # Filter unseeded torrent
                                 if seeders < self.minseed or leechers < self.minleech:
                                     if mode != 'RSS':
                                         logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
@@ -228,17 +222,17 @@ class FreshOnTVProvider(generic.TorrentProvider):
 
                                 items[mode].append(item)
 
-                except Exception as e:
+                except Exception:
                     logger.log(u"Failed parsing provider. Traceback: %s" % traceback.format_exc(), logger.ERROR)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -252,6 +246,6 @@ class FreshOnTVCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_params = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_params)}
+        return {'entries': self.provider.search(search_params)}
 
 provider = FreshOnTVProvider()

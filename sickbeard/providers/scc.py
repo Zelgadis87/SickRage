@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: Idan Gutman
 # Modified by jkaberg, https://github.com/jkaberg for SceneAccess
 # URL: http://code.google.com/p/sickbeard/
@@ -25,17 +26,15 @@ import sickbeard
 from sickbeard.common import cpu_presets
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard.providers import generic
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
-class SCCProvider(generic.TorrentProvider):
+
+class SCCProvider(TorrentProvider):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "SceneAccess")
-
-        self.supportsBacklog = True
-
+        TorrentProvider.__init__(self, "SceneAccess")
 
         self.username = None
         self.password = None
@@ -45,28 +44,31 @@ class SCCProvider(generic.TorrentProvider):
 
         self.cache = SCCCache(self)
 
-        self.urls = {'base_url': 'https://sceneaccess.eu',
-                     'login': 'https://sceneaccess.eu/login',
-                     'detail': 'https://www.sceneaccess.eu/details?id=%s',
-                     'search': 'https://sceneaccess.eu/all?search=%s&method=1&%s',
-                     'download': 'https://www.sceneaccess.eu/%s'}
+        self.urls = {
+            'base_url': 'https://sceneaccess.eu',
+            'login': 'https://sceneaccess.eu/login',
+            'detail': 'https://www.sceneaccess.eu/details?id=%s',
+            'search': 'https://sceneaccess.eu/all?search=%s&method=1&%s',
+            'download': 'https://www.sceneaccess.eu/%s'
+        }
 
         self.url = self.urls['base_url']
 
-        self.categories = { 'sponly': 'c26=26&c44=44&c45=45', # Archive, non-scene HD, non-scene SD; need to include non-scene because WEB-DL packs get added to those categories
-                            'eponly': 'c27=27&c17=17&c44=44&c45=45&c33=33&c34=34'} # TV HD, TV SD, non-scene HD, non-scene SD, foreign XviD, foreign x264
+        self.categories = {
+            'Season': 'c26=26&c44=44&c45=45',  # Archive, non-scene HD, non-scene SD; need to include non-scene because WEB-DL packs get added to those categories
+            'Episode': 'c17=17&c27=27&c33=33&c34=34&c44=44&c45=45',  # TV HD, TV SD, non-scene HD, non-scene SD, foreign XviD, foreign x264
+            'RSS': 'c17=17&c26=26&c27=27&c33=33&c34=34&c44=44&c45=45'  # Season + Episode
+        }
 
-    def isEnabled(self):
-        return self.enabled
+    def login(self):
 
-    def _doLogin(self):
+        login_params = {
+            'username': self.username,
+            'password': self.password,
+            'submit': 'come on in'
+        }
 
-        login_params = {'username': self.username,
-                        'password': self.password,
-                        'submit': 'come on in'}
-
-
-        response = self.getURL(self.urls['login'], post_data=login_params, timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -78,18 +80,18 @@ class SCCProvider(generic.TorrentProvider):
 
         return True
 
-    def _isSection(self, section, text):
+    @staticmethod
+    def _isSection(section, text):
         title = r'<title>.+? \| %s</title>' % section
         return re.search(title, text, re.IGNORECASE)
 
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
-
-        results = []
-
-        if not self._doLogin():
-            return results
+    def search(self, search_strings, age=0, ep_obj=None):  # pylint: disable=too-many-locals,too-many-branches
 
         items = {'Season': [], 'Episode': [], 'RSS': []}
+        results = []
+
+        if not self.login():
+            return results
 
         for mode in search_strings.keys():
             if mode != 'RSS':
@@ -98,11 +100,11 @@ class SCCProvider(generic.TorrentProvider):
                 if mode != 'RSS':
                     logger.log(u"Search string: %s " % search_string, logger.DEBUG)
 
-                searchURL = self.urls['search'] % (urllib.quote(search_string), self.categories[search_mode])
+                searchURL = self.urls['search'] % (urllib.quote(search_string), self.categories[mode])
 
                 try:
-                    logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
-                    data = self.getURL(searchURL)
+                    logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
+                    data = self.get_url(searchURL)
                     time.sleep(cpu_presets[sickbeard.CPU_PRESET])
                 except Exception as e:
                     logger.log(u"Unable to fetch data. Error: %s" % repr(e), logger.WARNING)
@@ -110,11 +112,11 @@ class SCCProvider(generic.TorrentProvider):
                 if not data:
                     continue
 
-                with BS4Parser(data, features=["html5lib", "permissive"]) as html:
+                with BS4Parser(data, 'html5lib') as html:
                     torrent_table = html.find('table', attrs={'id': 'torrents-table'})
                     torrent_rows = torrent_table.find_all('tr') if torrent_table else []
 
-                    #Continue only if at least one Release is found
+                    # Continue only if at least one Release is found
                     if len(torrent_rows) < 2:
                         logger.log(u"Data returned from provider does not contain any torrents", logger.DEBUG)
                         continue
@@ -123,11 +125,11 @@ class SCCProvider(generic.TorrentProvider):
 
                         try:
                             link = result.find('td', attrs={'class': 'ttr_name'}).find('a')
-                            url  = result.find('td', attrs={'class': 'td_dl'}).find('a')
+                            url = result.find('td', attrs={'class': 'td_dl'}).find('a')
 
                             title = link.string
                             if re.search(r'\.\.\.', title):
-                                data = self.getURL(self.url + "/" + link['href'])
+                                data = self.get_url(self.url + "/" + link['href'])
                                 if data:
                                     with BS4Parser(data) as details_html:
                                         title = re.search('(?<=").+(?<!")', details_html.title.string).group(0)
@@ -141,7 +143,7 @@ class SCCProvider(generic.TorrentProvider):
                         if not all([title, download_url]):
                             continue
 
-                        #Filter unseeded torrent
+                        # Filter unseeded torrent
                         if seeders < self.minseed or leechers < self.minleech:
                             if mode != 'RSS':
                                 logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
@@ -153,28 +155,29 @@ class SCCProvider(generic.TorrentProvider):
 
                         items[mode].append(item)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
-    def _convertSize(self, size):
+    @staticmethod
+    def _convertSize(size):
         size, base = size.split()
         size = float(size)
         if base in 'KB':
-            size = size * 1024
+            size *= 1024 ** 1
         elif base in 'MB':
-            size = size * 1024**2
+            size *= 1024 ** 2
         elif base in 'GB':
-            size = size * 1024**3
+            size *= 1024 ** 3
         elif base in 'TB':
-            size = size * 1024**4
-        return int(size)
+            size *= 1024 ** 4
+        return long(size)
 
 
 class SCCCache(tvcache.TVCache):
@@ -187,6 +190,6 @@ class SCCCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_strings = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_strings)}
+        return {'entries': self.provider.search(search_strings)}
 
 provider = SCCProvider()

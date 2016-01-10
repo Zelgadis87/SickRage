@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: seedboy
 # URL: https://github.com/seedboy
 #
@@ -17,19 +18,17 @@
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
 import re
-from sickbeard.providers import generic
 from sickbeard import logger
 from sickbeard import tvcache
-from sickrage.helper.exceptions import AuthException
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.helper.exceptions import AuthException, ex
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
-class IPTorrentsProvider(generic.TorrentProvider):
+
+class IPTorrentsProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "IPTorrents")
-
-        self.supportsBacklog = True
-
+        TorrentProvider.__init__(self, "IPTorrents")
 
         self.username = None
         self.password = None
@@ -48,24 +47,21 @@ class IPTorrentsProvider(generic.TorrentProvider):
 
         self.categories = '73=&60='
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
 
         if not self.username or not self.password:
             raise AuthException("Your authentication credentials for " + self.name + " are missing, check your config.")
 
         return True
 
-    def _doLogin(self):
+    def login(self):
 
         login_params = {'username': self.username,
                         'password': self.password,
                         'login': 'submit'}
 
-        self.getURL(self.urls['login'], timeout=30)
-        response = self.getURL(self.urls['login'], post_data=login_params, timeout=30)
+        self.get_url(self.urls['login'], timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -79,14 +75,14 @@ class IPTorrentsProvider(generic.TorrentProvider):
 
         return True
 
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_params, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
         freeleech = '&free=on' if self.freeleech else ''
 
-        if not self._doLogin():
+        if not self.login():
             return results
 
         for mode in search_params.keys():
@@ -99,17 +95,17 @@ class IPTorrentsProvider(generic.TorrentProvider):
                 # URL with 50 tv-show results, or max 150 if adjusted in IPTorrents profile
                 searchURL = self.urls['search'] % (self.categories, freeleech, search_string)
                 searchURL += ';o=seeders' if mode != 'RSS' else ''
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
+                logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
 
-                data = self.getURL(searchURL)
+                data = self.get_url(searchURL)
                 if not data:
                     continue
 
                 try:
                     data = re.sub(r'(?im)<button.+?<[\/]button>', '', data, 0)
-                    with BS4Parser(data, features=["html5lib", "permissive"]) as html:
+                    with BS4Parser(data, 'html5lib') as html:
                         if not html:
-                            logger.log("No data returned from provider", logger.DEBUG)
+                            logger.log(u"No data returned from provider", logger.DEBUG)
                             continue
 
                         if html.find(text='No Torrents Found!'):
@@ -119,7 +115,7 @@ class IPTorrentsProvider(generic.TorrentProvider):
                         torrent_table = html.find('table', attrs={'class': 'torrents'})
                         torrents = torrent_table.find_all('tr') if torrent_table else []
 
-                        #Continue only if one Release is found
+                        # Continue only if one Release is found
                         if len(torrents) < 2:
                             logger.log(u"Data returned from provider does not contain any torrents", logger.DEBUG)
                             continue
@@ -130,14 +126,14 @@ class IPTorrentsProvider(generic.TorrentProvider):
                                 download_url = self.urls['base_url'] + result.find_all('td')[3].find('a')['href']
                                 size = self._convertSize(result.find_all('td')[5].text)
                                 seeders = int(result.find('td', attrs={'class': 'ac t_seeders'}).text)
-                                leechers = int(result.find('td', attrs = {'class' : 'ac t_leechers'}).text)
+                                leechers = int(result.find('td', attrs={'class': 'ac t_leechers'}).text)
                             except (AttributeError, TypeError, KeyError):
                                 continue
 
                             if not all([title, download_url]):
                                 continue
 
-                            #Filter unseeded torrent
+                            # Filter unseeded torrent
                             if seeders < self.minseed or leechers < self.minleech:
                                 if mode != 'RSS':
                                     logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
@@ -149,31 +145,33 @@ class IPTorrentsProvider(generic.TorrentProvider):
 
                             items[mode].append(item)
 
-                except Exception, e:
+                except Exception as e:
                     logger.log(u"Failed parsing provider. Error: %r" % ex(e), logger.ERROR)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
-    def _convertSize(self, size):
+    @staticmethod
+    def _convertSize(size):
         size, modifier = size.split(' ')
         size = float(size)
         if modifier in 'KB':
-            size = size * 1024
+            size *= 1024 ** 1
         elif modifier in 'MB':
-            size = size * 1024**2
+            size *= 1024 ** 2
         elif modifier in 'GB':
-            size = size * 1024**3
+            size *= 1024 ** 3
         elif modifier in 'TB':
-            size = size * 1024**4
-        return int(size)
+            size *= 1024 ** 4
+        return long(size)
+
 
 class IPTorrentsCache(tvcache.TVCache):
     def __init__(self, provider_obj):
@@ -185,7 +183,7 @@ class IPTorrentsCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_params = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_params)}
+        return {'entries': self.provider.search(search_params)}
 
 
 provider = IPTorrentsProvider()

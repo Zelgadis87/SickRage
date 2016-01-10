@@ -23,17 +23,15 @@ import urllib
 import requests
 
 from sickbeard import logger
-from sickbeard.providers import generic
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class XthorProvider(generic.TorrentProvider):
+class XthorProvider(TorrentProvider):
 
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "Xthor")
-
-        self.supportsBacklog = True
+        TorrentProvider.__init__(self, "Xthor")
 
         self.cj = cookielib.CookieJar()
 
@@ -45,10 +43,7 @@ class XthorProvider(generic.TorrentProvider):
         self.password = None
         self.ratio = None
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _doLogin(self):
+    def login(self):
 
         if any(requests.utils.dict_from_cookiejar(self.session.cookies).values()):
             return True
@@ -57,7 +52,7 @@ class XthorProvider(generic.TorrentProvider):
                         'password': self.password,
                         'submitme': 'X'}
 
-        response = self.getURL(self.url + '/takelogin.php', post_data=login_params, timeout=30)
+        response = self.get_url(self.url + '/takelogin.php', post_data=login_params, timeout=30)
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -68,15 +63,13 @@ class XthorProvider(generic.TorrentProvider):
             logger.log(u"Invalid username or password. Check your settings", logger.WARNING)
             return False
 
-        return True
-
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_params, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
         # check for auth
-        if not self._doLogin():
+        if not self.login():
             return results
 
         for mode in search_params.keys():
@@ -87,49 +80,58 @@ class XthorProvider(generic.TorrentProvider):
                     logger.log(u"Search string: %s " % search_string, logger.DEBUG)
 
                 searchURL = self.urlsearch % (urllib.quote(search_string), self.categories)
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
-                data = self.getURL(searchURL)
+                logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
+                data = self.get_url(searchURL)
 
                 if not data:
                     continue
 
-                with BS4Parser(data, features=["html5lib", "permissive"]) as html:
-                    resultsTable = html.find("table", {"class" : "table2 table-bordered2"})
-                    if resultsTable:
-                        rows = resultsTable.findAll("tr")
-                        for row in rows:
-                            link = row.find("a", href=re.compile("details.php"))
-                            if link:
-                                title = link.text
-                                download_url = self.url + '/' + row.find("a", href=re.compile("download.php"))['href']
-                                #FIXME
-                                size = -1
-                                seeders = 1
-                                leechers = 0
+                with BS4Parser(data, 'html5lib') as html:
+                    resultsTable = html.find("table", {"class": "table2 table-bordered2"})
+                    if not resultsTable:
+                        continue
 
-                                if not all([title, download_url]):
-                                    continue
+                    rows = resultsTable.findAll("tr")
+                    for row in rows:
+                        link = row.find("a", href=re.compile("details.php"))
+                        if not link:
+                            continue
 
-                                #Filter unseeded torrent
-                                #if seeders < self.minseed or leechers < self.minleech:
-                                #    if mode != 'RSS':
-                                #        logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
-                                #    continue
+                        title = link.text
+                        download_item = row.find("a", href=re.compile("download.php"))
+                        if not download_item:
+                            continue
 
-                                item = title, download_url, size, seeders, leechers
-                                if mode != 'RSS':
-                                    logger.log(u"Found result: %s " % title, logger.DEBUG)
+                        download_url = self.url + '/' + download_item['href']
 
-                                items[mode].append(item)
+                        # FIXME
+                        size = -1
+                        seeders = 1
+                        leechers = 0
 
-            #For each search mode sort all the items by seeders if available if available
+                        if not all([title, download_url]):
+                            continue
+
+                        # Filter unseeded torrent
+                        # if seeders < self.minseed or leechers < self.minleech:
+                        #    if mode != 'RSS':
+                        #        logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
+                        #    continue
+
+                        item = title, download_url, size, seeders, leechers
+                        if mode != 'RSS':
+                            logger.log(u"Found result: %s " % title, logger.DEBUG)
+
+                        items[mode].append(item)
+
+            # For each search mode sort all the items by seeders if available if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 provider = XthorProvider()

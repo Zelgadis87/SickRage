@@ -1,6 +1,7 @@
+# coding=utf-8
 # Author: Tyler Fenby <tylerfenby@gmail.com>
-# URL: https://sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # This file is part of SickRage.
 #
@@ -111,16 +112,16 @@ def hasFailed(release, size, provider="%"):
 
     myDB = db.DBConnection('failed.db')
     sql_results = myDB.select(
-        "SELECT * FROM failed WHERE release=? AND size=? AND provider LIKE ?",
+        "SELECT release FROM failed WHERE release=? AND size=? AND provider LIKE ? LIMIT 1",
         [release, size, provider])
 
-    return (len(sql_results) > 0)
+    return len(sql_results) > 0
 
 
 def revertEpisode(epObj):
     """Restore the episodes of a failed download to their original state"""
     myDB = db.DBConnection('failed.db')
-    sql_results = myDB.select("SELECT * FROM history WHERE showid=? AND season=?",
+    sql_results = myDB.select("SELECT episode, old_status FROM history WHERE showid=? AND season=?",
                               [epObj.show.indexerid, epObj.season])
 
     history_eps = dict([(res["episode"], res) for res in sql_results])
@@ -132,12 +133,12 @@ def revertEpisode(epObj):
                 logger.log(u"Found in history")
                 epObj.status = history_eps[epObj.episode]['old_status']
             else:
-                logger.log(u"WARNING: Episode not found in history. Setting it back to WANTED",
-                           logger.WARNING)
+                logger.log(u"Episode don't have a previous snatched status to revert. Setting it back to WANTED",
+                           logger.DEBUG)
                 epObj.status = WANTED
                 epObj.saveToDB()
 
-    except EpisodeNotFoundException, e:
+    except EpisodeNotFoundException as e:
         logger.log(u"Unable to create episode, please set its status manually: " + ex(e),
                    logger.WARNING)
 
@@ -157,7 +158,7 @@ def markFailed(epObj):
             epObj.status = Quality.compositeStatus(FAILED, quality)
             epObj.saveToDB()
 
-    except EpisodeNotFoundException, e:
+    except EpisodeNotFoundException as e:
         logger.log(u"Unable to get episode, please set its status manually: " + ex(e), logger.WARNING)
 
     return log_str
@@ -220,7 +221,6 @@ def findRelease(epObj):
     release = None
     provider = None
 
-
     # Clear old snatches for this release if any exist
     myDB = db.DBConnection('failed.db')
     myDB.action("DELETE FROM history WHERE showid=" + str(epObj.show.indexerid) + " AND season=" + str(
@@ -242,8 +242,8 @@ def findRelease(epObj):
 
         # Found a previously failed release
         logger.log(u"Failed release found for season (%s): (%s)" % (epObj.season, result["release"]), logger.DEBUG)
-        return (release, provider)
+        return release, provider
 
     # Release was not found
     logger.log(u"No releases found for season (%s) of (%s)" % (epObj.season, epObj.show.indexerid), logger.DEBUG)
-    return (release, provider)
+    return release, provider

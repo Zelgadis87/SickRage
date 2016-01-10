@@ -1,6 +1,6 @@
 # coding=utf-8
-# Author: Mr_Orange <mr_orange@hotmail.it>
-# URL: http://code.google.com/p/sickbeard/
+# Author: Dustyn Gibson <miigotu@gmail.com>
+# URL: http://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -17,27 +17,24 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import posixpath  # Must use posixpath
 import traceback
-
 from urllib import urlencode
-
-import xmltodict
-import HTMLParser
+from bs4 import BeautifulSoup
 
 import sickbeard
 from sickbeard import logger
 from sickbeard import tvcache
 from sickbeard.common import USER_AGENT
-from sickbeard.providers import generic
-from xml.parsers.expat import ExpatError
+from sickrage.helper.common import try_int
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
-class KATProvider(generic.TorrentProvider):
+
+class KATProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "KickAssTorrents")
+        TorrentProvider.__init__(self, "KickAssTorrents")
 
-        self.supportsBacklog = True
         self.public = True
 
         self.confirmed = True
@@ -45,14 +42,14 @@ class KATProvider(generic.TorrentProvider):
         self.minseed = None
         self.minleech = None
 
-        self.cache = KATCache(self)
-
         self.urls = {
             'base_url': 'https://kat.cr/',
             'search': 'https://kat.cr/%s/',
         }
 
         self.url = self.urls['base_url']
+        self.custom_url = None
+
         self.headers.update({'User-Agent': USER_AGENT})
 
         self.search_params = {
@@ -63,15 +60,14 @@ class KATProvider(generic.TorrentProvider):
             'category': 'tv'
         }
 
-    def isEnabled(self):
-        return self.enabled
+        self.cache = KATCache(self)
 
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
         # select the correct category
-        anime = (self.show and self.show.anime) or (epObj and epObj.show and epObj.show.anime) or False
+        anime = (self.show and self.show.anime) or (ep_obj and ep_obj.show and ep_obj.show.anime) or False
         self.search_params['category'] = ('tv', 'anime')[anime]
 
         for mode in search_strings.keys():
@@ -87,58 +83,49 @@ class KATProvider(generic.TorrentProvider):
                 url_fmt_string = 'usearch' if mode != 'RSS' else search_string
                 try:
                     searchURL = self.urls['search'] % url_fmt_string + '?' + urlencode(self.search_params)
+                    if self.custom_url:
+                        searchURL = posixpath.join(self.custom_url, searchURL.split(self.url)[1].lstrip('/'))  # Must use posixpath
+
                     logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
-                    data = self.getURL(searchURL)
-                    #data = self.getURL(self.urls[('search', 'rss')[mode == 'RSS']], params=self.search_params)
+                    data = self.get_url(searchURL)
                     if not data:
-                        logger.log("No data returned from provider", logger.DEBUG)
+                        logger.log(u'URL did not return data, maybe try a custom url, or a different one', logger.DEBUG)
                         continue
 
                     if not data.startswith('<?xml'):
-                        logger.log(u'Expected xml but got something else, is your proxy failing?', logger.INFO)
+                        logger.log(u'Expected xml but got something else, is your mirror failing?', logger.INFO)
                         continue
 
-                    try:
-                        data = xmltodict.parse(HTMLParser.HTMLParser().unescape(data.encode('utf-8')).replace('&', '&amp;'))
-                    except ExpatError:
-                        logger.log(u"Failed parsing provider. Traceback: %r\n%r" % (traceback.format_exc(), data), logger.ERROR)
-                        continue
+                    data = BeautifulSoup(data, 'html5lib')
 
-                    if not all([data, 'rss' in data, 'channel' in data['rss'], 'item' in data['rss']['channel']]):
-                        logger.log(u"Malformed rss returned, skipping", logger.DEBUG)
-                        continue
-
-                    # https://github.com/martinblech/xmltodict/issues/111
-                    entries = data['rss']['channel']['item']
-                    entries = entries if isinstance(entries, list) else [entries]
-
+                    entries = data.findAll('item')
                     for item in entries:
                         try:
-                            title = item['title'].decode('utf-8')
-
+                            title = item.title.text
+                            assert isinstance(title, unicode)
                             # Use the torcache link kat provides,
                             # unless it is not torcache or we are not using blackhole
                             # because we want to use magnets if connecting direct to client
                             # so that proxies work.
-                            download_url = item['enclosure']['@url']
+                            download_url = item.enclosure['url']
                             if sickbeard.TORRENT_METHOD != "blackhole" or 'torcache' not in download_url:
-                                download_url = item['torrent:magnetURI']
+                                download_url = item.find('torrent:magneturi').next.replace('CDATA', '').strip('[]')
 
-                            seeders = int(item['torrent:seeds'])
-                            leechers = int(item['torrent:peers'])
-                            verified = bool(int(item['torrent:verified']) or 0)
-                            size = int(item['torrent:contentLength'])
+                            if not (title and download_url):
+                                continue
 
-                            info_hash = item['torrent:infoHash']
-                            #link = item['link']
+                            seeders = try_int(item.find('torrent:seeds').text, 0)
+                            leechers = try_int(item.find('torrent:peers').text, 0)
+                            verified = bool(try_int(item.find('torrent:verified').text, 0))
+                            size = try_int(item.find('torrent:contentlength').text)
 
-                        except (AttributeError, TypeError, KeyError):
+                            info_hash = item.find('torrent:infohash').text
+                            # link = item['link']
+
+                        except (AttributeError, TypeError, KeyError, ValueError):
                             continue
 
-                        if not all([title, download_url]):
-                            continue
-
-                        #Filter unseeded torrent
+                        # Filter unseeded torrent
                         if seeders < self.minseed or leechers < self.minleech:
                             if mode != 'RSS':
                                 logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
@@ -158,14 +145,14 @@ class KATProvider(generic.TorrentProvider):
                 except Exception:
                     logger.log(u"Failed parsing provider. Traceback: %r" % traceback.format_exc(), logger.ERROR)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -179,6 +166,6 @@ class KATCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_params = {'RSS': ['tv', 'anime']}
-        return {'entries': self.provider._doSearch(search_params)}
+        return {'entries': self.provider.search(search_params)}
 
 provider = KATProvider()

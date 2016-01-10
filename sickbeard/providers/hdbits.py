@@ -1,3 +1,4 @@
+# coding=utf-8
 # This file is part of SickRage.
 #
 # SickRage is free software: you can redistribute it and/or modify
@@ -16,11 +17,10 @@
 import datetime
 import urllib
 
-from sickbeard.providers import generic
-
 from sickbeard import classes
 from sickbeard import logger, tvcache
 from sickrage.helper.exceptions import AuthException
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 try:
     import json
@@ -28,13 +28,10 @@ except ImportError:
     import simplejson as json
 
 
-class HDBitsProvider(generic.TorrentProvider):
+class HDBitsProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "HDBits")
-
-        self.supportsBacklog = True
-
+        TorrentProvider.__init__(self, "HDBits")
 
         self.username = None
         self.passkey = None
@@ -49,10 +46,7 @@ class HDBitsProvider(generic.TorrentProvider):
 
         self.url = self.urls['base_url']
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
 
         if not self.username or not self.passkey:
             raise AuthException("Your authentication credentials for " + self.name + " are missing, check your config.")
@@ -76,25 +70,21 @@ class HDBitsProvider(generic.TorrentProvider):
         return episode_search_string
 
     def _get_title_and_url(self, item):
-
-        title = item['name']
-        if title:
-            title = self._clean_title_from_provider(title)
-
+        title = item.get('name', '').replace(' ', '.')
         url = self.urls['download'] + urllib.urlencode({'id': item['id'], 'passkey': self.passkey})
 
-        return (title, url)
+        return title, url
 
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_params, age=0, ep_obj=None):
 
-        #FIXME
+        # FIXME
         results = []
 
-        logger.log(u"Search string: %s" %  search_params, logger.DEBUG)
+        logger.log(u"Search string: %s" % search_params, logger.DEBUG)
 
-        self._checkAuth()
+        self._check_auth()
 
-        parsedJSON = self.getURL(self.urls['search'], post_data=search_params, json=True)
+        parsedJSON = self.get_url(self.urls['search'], post_data=search_params, json=True)
         if not parsedJSON:
             return []
 
@@ -107,16 +97,16 @@ class HDBitsProvider(generic.TorrentProvider):
 
             for item in items:
                 results.append(item)
-        #FIXME SORTING
+        # FIXME SORTING
         return results
 
-    def findPropers(self, search_date=None):
+    def find_propers(self, search_date=None):
         results = []
 
         search_terms = [' proper ', ' repack ']
 
         for term in search_terms:
-            for item in self._doSearch(self._make_post_data_JSON(search_term=term)):
+            for item in self.search(self._make_post_data_JSON(search_term=term)):
                 if item['utadded']:
                     try:
                         result_date = datetime.datetime.fromtimestamp(int(item['utadded']))
@@ -184,7 +174,7 @@ class HDBitsProvider(generic.TorrentProvider):
 
         return json.dumps(post_data)
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 

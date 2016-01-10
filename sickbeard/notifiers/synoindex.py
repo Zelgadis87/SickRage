@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Sebastien Erard <sebastien_erard@hotmail.com>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -26,7 +28,7 @@ from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
 
 
-class synoIndexNotifier:
+class synoIndexNotifier(object):
     def notify_snatch(self, ep_name):
         pass
 
@@ -37,6 +39,9 @@ class synoIndexNotifier:
         pass
 
     def notify_git_update(self, new_version):
+        pass
+
+    def notify_login(self, ipaddress=""):
         pass
 
     def moveFolder(self, old_path, new_path):
@@ -54,9 +59,9 @@ class synoIndexNotifier:
             try:
                 p = subprocess.Popen(synoindex_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      cwd=sickbeard.PROG_DIR)
-                out, err = p.communicate()  #@UnusedVariable
+                out, err = p.communicate()  # @UnusedVariable
                 logger.log(u"Script result: " + str(out), logger.DEBUG)
-            except OSError, e:
+            except OSError as e:
                 logger.log(u"Unable to run synoindex: " + ex(e), logger.ERROR)
 
     def deleteFolder(self, cur_path):
@@ -79,9 +84,9 @@ class synoIndexNotifier:
             try:
                 p = subprocess.Popen(synoindex_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      cwd=sickbeard.PROG_DIR)
-                out, err = p.communicate()  #@UnusedVariable
+                out, err = p.communicate()  # @UnusedVariable
                 logger.log(u"Script result: " + str(out), logger.DEBUG)
-            except OSError, e:
+            except OSError as e:
                 logger.log(u"Unable to run synoindex: " + ex(e), logger.ERROR)
 
 

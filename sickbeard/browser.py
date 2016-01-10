@@ -1,6 +1,7 @@
+# coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: https://sickrage.tv/
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io/
+# Git: https://github.com/SickRage/SickRage.git
 #
 # This file is part of SickRage.
 #
@@ -31,13 +32,42 @@ def getWinDrives():
     from ctypes import windll
 
     drives = []
-    bitmask = windll.kernel32.GetLogicalDrives()  #@UndefinedVariable
+    bitmask = windll.kernel32.GetLogicalDrives()  # @UndefinedVariable
     for letter in string.uppercase:
         if bitmask & 1:
             drives.append(letter)
         bitmask >>= 1
 
     return drives
+
+
+def getFileList(path, includeFiles):
+    # prune out directories to protect the user from doing stupid things (already lower case the dir to reduce calls)
+    hideList = ["boot", "bootmgr", "cache", "config.msi", "msocache", "recovery", "$recycle.bin",
+                "recycler", "system volume information", "temporary internet files"]  # windows specific
+    hideList += [".fseventd", ".spotlight", ".trashes", ".vol", "cachedmessages", "caches", "trash"]  # osx specific
+    hideList += [".git"]
+
+    fileList = []
+    for filename in ek(os.listdir, path):
+        if filename.lower() in hideList:
+            continue
+
+        fullFilename = ek(os.path.join, path, filename)
+        isDir = ek(os.path.isdir, fullFilename)
+
+        if not includeFiles and not isDir:
+            continue
+
+        entry = {
+            'name': filename,
+            'path': fullFilename
+        }
+        if not isDir:
+            entry['isFile'] = True
+        fileList.append(entry)
+
+    return fileList
 
 
 def foldersAtPath(path, includeParent=False, includeFiles=False):
@@ -51,16 +81,16 @@ def foldersAtPath(path, includeParent=False, includeFiles=False):
     """
 
     # walk up the tree until we find a valid path
-    while path and not os.path.isdir(path):
-        if path == os.path.dirname(path):
+    while path and not ek(os.path.isdir, path):
+        if path == ek(os.path.dirname, path):
             path = ''
             break
         else:
-            path = os.path.dirname(path)
+            path = ek(os.path.dirname, path)
 
     if path == "":
         if os.name == 'nt':
-            entries = [{'current_path': 'Root'}]
+            entries = [{'currentPath': 'Root'}]
             for letter in getWinDrives():
                 letterPath = letter + ':\\'
                 entries.append({'name': letterPath, 'path': letterPath})
@@ -69,32 +99,23 @@ def foldersAtPath(path, includeParent=False, includeFiles=False):
             path = '/'
 
     # fix up the path and find the parent
-    path = os.path.abspath(os.path.normpath(path))
-    parentPath = os.path.dirname(path)
+    path = ek(os.path.abspath, ek(os.path.normpath, path))
+    parentPath = ek(os.path.dirname, path)
 
     # if we're at the root then the next step is the meta-node showing our drive letters
     if path == parentPath and os.name == 'nt':
         parentPath = ""
 
     try:
-        fileList = [{'name': filename, 'path': ek(os.path.join, path, filename)} for filename in ek(os.listdir, path)]
-    except OSError, e:
+        fileList = getFileList(path, includeFiles)
+    except OSError as e:
         logger.log(u"Unable to open " + path + ": " + repr(e) + " / " + str(e), logger.WARNING)
-        fileList = [{'name': filename, 'path': ek(os.path.join, parentPath, filename)} for filename in ek(os.listdir, parentPath)]
-
-    if not includeFiles:
-        fileList = filter(lambda entry: ek(os.path.isdir, entry['path']), fileList)
-
-    # prune out directories to protect the user from doing stupid things (already lower case the dir to reduce calls)
-    hideList = ["boot", "bootmgr", "cache", "msocache", "recovery", "$recycle.bin", "recycler",
-                "system volume information", "temporary internet files"]  # windows specific
-    hideList += [".fseventd", ".spotlight", ".trashes", ".vol", "cachedmessages", "caches", "trash"]  # osx specific
-    fileList = filter(lambda entry: entry['name'].lower() not in hideList, fileList)
+        fileList = getFileList(parentPath, includeFiles)
 
     fileList = sorted(fileList,
-                      lambda x, y: cmp(os.path.basename(x['name']).lower(), os.path.basename(y['path']).lower()))
+                      lambda x, y: cmp(ek(os.path.basename, x['name']).lower(), ek(os.path.basename, y['path']).lower()))
 
-    entries = [{'current_path': path}]
+    entries = [{'currentPath': path}]
     if includeParent and parentPath != path:
         entries.append({'name': "..", 'path': parentPath})
     entries.extend(fileList)

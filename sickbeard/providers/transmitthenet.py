@@ -1,3 +1,4 @@
+# coding=utf-8
 # This file is part of SickRage.
 #
 # SickRage is free software: you can redistribute it and/or modify
@@ -20,58 +21,50 @@ from urllib import urlencode
 from sickbeard import logger
 from sickbeard import tvcache
 from sickbeard.bs4_parser import BS4Parser
-from sickbeard.providers import generic
 from sickrage.helper.exceptions import AuthException
+from sickrage.helper.common import try_int
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class TransmitTheNetProvider(generic.TorrentProvider):
+class TransmitTheNetProvider(TorrentProvider):
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "TransmitTheNet")
+        TorrentProvider.__init__(self, "TransmitTheNet")
 
         self.urls = {
             'base_url': 'https://transmithe.net/',
-            'index': 'https://transmithe.net/index.php',
+            'login': 'https://transmithe.net/login.php',
+            'search': 'https://transmithe.net/torrents.php',
         }
 
         self.url = self.urls['base_url']
-
-        self.supportsBacklog = True
 
         self.username = None
         self.password = None
         self.ratio = None
         self.minseed = None
         self.minleech = None
+        self.freeleech = None
 
         self.cache = TransmitTheNetCache(self)
 
-        self.search_params = {
-            "page": 'torrents',
-            "category": 0,
-            "active": 1
-        }
-
-    def isEnabled(self):
-        return self.enabled
-
-    def _checkAuth(self):
+    def _check_auth(self):
 
         if not self.username or not self.password:
             raise AuthException("Your authentication credentials for " + self.name + " are missing, check your config.")
 
         return True
 
-    def _doLogin(self):
+    def login(self):
 
         login_params = {
-            'uid': self.username,
-            'pwd': self.password,
-            'remember_me': 'on',
-            'login': 'submit'
+            'username': self.username,
+            'password': self.password,
+            'keeplogged': 'on',
+            'login': 'Login'
         }
 
-        response = self.getURL(self.urls['index'], params={'page': 'login'}, post_data=login_params, timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -82,12 +75,12 @@ class TransmitTheNetProvider(generic.TorrentProvider):
 
         return True
 
-    def _doSearch(self, search_strings, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_strings, age=0, ep_obj=None):
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
 
-        if not self._doLogin():
+        if not self.login():
             return results
 
         for mode in search_strings.keys():
@@ -96,45 +89,63 @@ class TransmitTheNetProvider(generic.TorrentProvider):
                 if mode != 'RSS':
                     logger.log(u"Search string: %s " % search_string, logger.DEBUG)
 
-                data = self.getURL(self.urls['index'], params=self.search_params)
-                searchURL = self.urls['index'] + "?" + urlencode(self.search_params)
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
+                search_params = {
+                    'searchtext': search_string,
+                    'filter_freeleech': (0, 1)[self.freeleech is True],
+                    'order_by': ('seeders', 'time')[mode == 'RSS'],
+                    "order_way": "desc"
+                }
 
+                if not search_string:
+                    del search_params['searchtext']
+
+                search_url = self.urls['search'] + "?" + urlencode(search_params)
+                logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
+
+                data = self.get_url(self.urls['search'], params=search_params)
                 if not data:
-                    logger.log("No data returned from provider", logger.DEBUG)
+                    logger.log(u"No data returned from provider", logger.DEBUG)
                     continue
 
                 try:
-                    with BS4Parser(data) as html:
+                    with BS4Parser(data, 'html5lib') as html:
+                        torrent_table = html.find('table', {'id': 'torrent_table'})
+                        if not torrent_table:
+                            logger.log(u"Data returned from %s does not contain any torrents" % self.name, logger.DEBUG)
+                            continue
 
-                        torrent_rows = []
-
-                        down_elems = html.findAll("img", {"alt": "Download Torrent"})
-                        for down_elem in down_elems:
-                            if down_elem:
-                                torr_row = down_elem.findParent('tr')
-                                if torr_row:
-                                    torrent_rows.append(torr_row)
-
+                        torrent_rows = torrent_table.findAll('tr', {'class': 'torrent'})
                         # Continue only if one Release is found
-                        if len(torrent_rows) < 1:
-                            logger.log(u"Data returned from provider does not contain any torrents", logger.DEBUG)
+                        if not torrent_rows:
+                            logger.log(u"Data returned from %s does not contain any torrents" % self.name, logger.DEBUG)
                             continue
 
                         for torrent_row in torrent_rows:
+                            freeleech = torrent_row.find('img', alt="Freeleech") is not None
+                            if self.freeleech and not freeleech:
+                                continue
 
-                            title = torrent_row.find('a', {"data-src": True})['data-src'].rsplit('.', 1)[0]
-                            download_href = torrent_row.find('img', {"alt": 'Download Torrent'}).findParent()['href']
-                            seeders = int(torrent_row.findAll('a', {'title': 'Click here to view peers details'})[0].text.strip())
-                            leechers = int(torrent_row.findAll('a', {'title': 'Click here to view peers details'})[1].text.strip())
-                            download_url = self.urls['base_url'] + download_href
-                            #FIXME
-                            size = -1
+                            download_item = torrent_row.find('a', {'title': 'Download Torrent'})
+                            if not download_item:
+                                continue
+
+                            download_url = self.urls['base_url'] + download_item['href']
+
+                            temp_anchor = torrent_row.find('a', {"data-src": True})
+                            title = temp_anchor['data-src'].rsplit('.', 1)[0]
+                            if not title:
+                                title = torrent_row.find('a', onmouseout='return nd();').string
+                                title = title.replace("[", "").replace("]", "").replace("/ ", "")
+                            size = try_int(temp_anchor['data-filesize'])
+
+                            temp_anchor = torrent_row.find('span', class_='time').parent.find_next_sibling()
+                            seeders = try_int(temp_anchor.text.strip())
+                            leechers = try_int(temp_anchor.find_next_sibling().text.strip())
 
                             if not all([title, download_url]):
                                 continue
 
-                            #Filter unseeded torrent
+                            # Filter unseeded torrent
                             if seeders < self.minseed or leechers < self.minleech:
                                 if mode != 'RSS':
                                     logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
@@ -156,7 +167,7 @@ class TransmitTheNetProvider(generic.TorrentProvider):
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
 
 
@@ -169,7 +180,7 @@ class TransmitTheNetCache(tvcache.TVCache):
 
     def _getRSSData(self):
         search_strings = {'RSS': ['']}
-        return {'entries': self.provider._doSearch(search_strings)}
+        return {'entries': self.provider.search(search_strings)}
 
 
 provider = TransmitTheNetProvider()

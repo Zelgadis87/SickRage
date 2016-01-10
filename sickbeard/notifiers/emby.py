@@ -1,3 +1,5 @@
+# coding=utf-8
+
 # Author: Nic Wolfe <nic@wolfeden.ca>
 # URL: http://code.google.com/p/sickbeard/
 #
@@ -30,7 +32,7 @@ except ImportError:
     import simplejson as json
 
 
-class EMBYNotifier:
+class EMBYNotifier(object):
 
     def _notify_emby(self, message, host=None, emby_apikey=None):
         """Handles notifying Emby host via HTTP API
@@ -46,8 +48,8 @@ class EMBYNotifier:
         if not emby_apikey:
             emby_apikey = sickbeard.EMBY_APIKEY
 
-        url = 'http://%s/emby/Notifications/Admin' % (host)
-        values = {'Name': 'SickRage', 'Description': message, 'ImageUrl': 'https://raw.githubusercontent.com/SiCKRAGETV/SickRage/master/gui/slick/images/sickrage-shark-mascot.png'}
+        url = 'http://%s/emby/Notifications/Admin' % host
+        values = {'Name': 'SickRage', 'Description': message, 'ImageUrl': 'https://raw.githubusercontent.com/SickRage/SickRage/master/gui/slick/images/sickrage-shark-mascot.png'}
         data = json.dumps(values)
         try:
             req = urllib2.Request(url, data)
@@ -61,7 +63,7 @@ class EMBYNotifier:
             logger.log(u'EMBY: HTTP response: ' + result.replace('\n', ''), logger.DEBUG)
             return True
 
-        except (urllib2.URLError, IOError), e:
+        except (urllib2.URLError, IOError) as e:
             logger.log(u'EMBY: Warning: Couldn\'t contact Emby at ' + url + ' ' + ex(e), logger.WARNING)
             return False
 
@@ -114,7 +116,7 @@ class EMBYNotifier:
                 logger.log(u'EMBY: HTTP response: ' + result.replace('\n', ''), logger.DEBUG)
                 return True
 
-            except (urllib2.URLError, IOError), e:
+            except (urllib2.URLError, IOError) as e:
                 logger.log(u'EMBY: Warning: Couldn\'t contact Emby at ' + url + ' ' + ex(e), logger.WARNING)
                 return False
 

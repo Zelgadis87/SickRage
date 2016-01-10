@@ -3,11 +3,6 @@
     import sickbeard
     from sickbeard.helpers import anon_url
 %>
-
-<%block name="scripts">
-<script type="text/javascript" src="${srRoot}/js/configAnime.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/config.js?${sbPID}"></script>
-</%block>
 <%block name="content">
 <div id="content960">
 <h1 class="header">${header}</h1>
@@ -19,11 +14,11 @@
             <div id="config-components">
 
                 <ul>
-                    <li><a href="#core-component-group1">AnimeDB Settings</a></li>
-                    <li><a href="#core-component-group2">Look &amp; Feel</a></li>
+                    <li><a href="#animedb-settings">AnimeDB Settings</a></li>
+                    <li><a href="#anime-look-feel">Look &amp; Feel</a></li>
                 </ul>
 
-                <div id="core-component-group1" class="tab-pane active component-group">
+                <div id="animedb-settings" class="tab-pane active component-group">
                     <div class="component-group-desc">
                         <img class="notifier-icon" src="${srRoot}/images/anidb24.png" alt="AniDB" title="AniDB" width="24" height="24" />
                         <h3><a href="${anon_url('http://anidb.info')}" onclick="window.open(this.href, '_blank'); return false;">AniDB</a></h3>
@@ -43,7 +38,7 @@
                             <div class="field-pair">
                                 <label class="nocheck">
                                     <span class="component-title">AniDB Username</span>
-                                    <input type="text" name="anidb_username" id="anidb_username" value="${sickbeard.ANIDB_USERNAME}" class="form-control input-sm input350" />
+                                    <input type="text" name="anidb_username" id="anidb_username" value="${sickbeard.ANIDB_USERNAME}" class="form-control input-sm input350" autocapitalize="off" autocomplete="no" />
                                 </label>
                                 <label class="nocheck">
                                     <span class="component-title">&nbsp;</span>
@@ -54,7 +49,7 @@
                             <div class="field-pair">
                                 <label class="nocheck">
                                     <span class="component-title">AniDB Password</span>
-                                    <input type="password" name="anidb_password" id="anidb_password" value="${sickbeard.ANIDB_PASSWORD}" class="form-control input-sm input350" />
+                                    <input type="password" name="anidb_password" id="anidb_password" value="${sickbeard.ANIDB_PASSWORD}" class="form-control input-sm input350" autocomplete="no" autocapitalize="off" />
                                 </label>
                                 <label class="nocheck">
                                     <span class="component-title">&nbsp;</span>
@@ -74,7 +69,7 @@
 
                 </div><!-- /component-group //-->
 
-                <div id="core-component-group2" class="tab-pane component-group">
+                <div id="anime-look-feel" class="tab-pane component-group">
 
                     <div class="component-group-desc">
                         <h3>Look and Feel</h3>
@@ -91,7 +86,7 @@
                    </fieldset>
                 </div><!-- /component-group //-->
 
-                <br/><input type="submit" class="btn config_submitter" value="Save Changes" /><br/>
+                <br><input type="submit" class="btn config_submitter" value="Save Changes" /><br>
 
             </div><!-- /config-components //-->
 

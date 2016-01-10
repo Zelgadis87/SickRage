@@ -25,6 +25,7 @@ server.key
 #  Compiled source   #
 ######################
 *.py[co]
+ua.json
 
 #  IDE specific      #
 ######################
@@ -60,8 +61,13 @@ Thumbs.db
 ######################
 lib/unrar2/UnRAR.exe
 
-# Bower #
+# Grunt #
 ######################
-bower_components
-node_modules
-gui/**/_bower.js
+.build/bower_components
+.build/node_modules
+.build/dist
+
+# Coverage #
+######################
+.coverage
+htmlcov

@@ -1,7 +1,8 @@
+# coding=utf-8
 # This file is part of SickRage.
 #
-# URL: https://www.sickrage.tv
-# Git: https://github.com/SiCKRAGETV/SickRage.git
+# URL: https://sickrage.github.io
+# Git: https://github.com/SickRage/SickRage.git
 #
 # SickRage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,7 +28,7 @@ from sickrage.helper.common import dateFormat, timeFormat
 from sickrage.helper.quality import get_quality_string
 
 
-class ComingEpisodes:
+class ComingEpisodes(object):
     """
     Missed:   yesterday...(less than 1 week)
     Today:    today
@@ -54,11 +55,8 @@ class ComingEpisodes:
         :return: The list of coming episodes
         """
 
-        if not isinstance(categories, list):
-            categories = categories.split('|')
-
-        if sort not in ComingEpisodes.sorts.keys():
-            sort = 'date'
+        categories = ComingEpisodes._get_categories(categories)
+        sort = ComingEpisodes._get_sort(sort)
 
         today = date.today().toordinal()
         next_week = (date.today() + timedelta(days=7)).toordinal()
@@ -124,7 +122,7 @@ class ComingEpisodes:
         if not group:
             return results
 
-        grouped_results = {category: [] for category in categories}
+        grouped_results = ComingEpisodes._get_categories_map(categories)
 
         for result in results:
             if result['paused'] and not paused:
@@ -158,3 +156,29 @@ class ComingEpisodes:
             grouped_results[category].append(result)
 
         return grouped_results
+
+    @staticmethod
+    def _get_categories(categories):
+        if not categories:
+            return []
+
+        if not isinstance(categories, list):
+            return categories.split('|')
+
+        return categories
+
+    @staticmethod
+    def _get_categories_map(categories):
+        if not categories:
+            return {}
+
+        return {category: [] for category in categories}
+
+    @staticmethod
+    def _get_sort(sort):
+        sort = sort.lower() if sort else ''
+
+        if sort not in ComingEpisodes.sorts.keys():
+            return 'date'
+
+        return sort

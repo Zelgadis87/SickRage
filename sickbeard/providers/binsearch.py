@@ -1,3 +1,4 @@
+# coding=utf-8
 # Author: moparisthebest <admin@moparisthebest.com>
 #
 # This file is part of Sick Beard.
@@ -14,26 +15,25 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with Sick Beard.  If not, see <http://www.gnu.org/licenses/>.
+
 import urllib
 import re
 
-
-import generic
-
 from sickbeard import logger
 from sickbeard import tvcache
+from sickrage.providers.nzb.NZBProvider import NZBProvider
 
-class BinSearchProvider(generic.NZBProvider):
+
+class BinSearchProvider(NZBProvider):
     def __init__(self):
-        generic.NZBProvider.__init__(self, "BinSearch")
+        NZBProvider.__init__(self, "BinSearch")
 
         self.public = True
         self.cache = BinSearchCache(self)
         self.urls = {'base_url': 'https://www.binsearch.info/'}
         self.url = self.urls['base_url']
+        self.supports_backlog = False
 
-    def isEnabled(self):
-        return self.enabled
 
 class BinSearchCache(tvcache.TVCache):
     def __init__(self, provider_obj):
@@ -44,13 +44,13 @@ class BinSearchCache(tvcache.TVCache):
         # compile and save our regular expressions
 
         # this pulls the title from the URL in the description
-        self.descTitleStart = re.compile('^.*https?://www\.binsearch\.info/.b=')
+        self.descTitleStart = re.compile(r'^.*https?://www\.binsearch\.info/.b=')
         self.descTitleEnd = re.compile('&amp;.*$')
 
         # these clean up the horrible mess of a title if the above fail
         self.titleCleaners = [
-            re.compile('.?yEnc.?\(\d+/\d+\)$'),
-            re.compile(' \[\d+/\d+\] '),
+            re.compile(r'.?yEnc.?\(\d+/\d+\)$'),
+            re.compile(r' \[\d+/\d+\] '),
         ]
 
     def _get_title_and_url(self, item):
@@ -80,7 +80,7 @@ class BinSearchCache(tvcache.TVCache):
         if url:
             url = url.replace('&amp;', '&')
 
-        return (title, url)
+        return title, url
 
     def updateCache(self):
         # check if we should update
@@ -94,9 +94,9 @@ class BinSearchCache(tvcache.TVCache):
         self.setLastUpdate()
 
         cl = []
-        for group in ['alt.binaries.boneless','alt.binaries.misc','alt.binaries.hdtv','alt.binaries.hdtv.x264','alt.binaries.tv','alt.binaries.tvseries','alt.binaries.teevee']:
+        for group in ['alt.binaries.hdtv', 'alt.binaries.hdtv.x264', 'alt.binaries.tv', 'alt.binaries.tvseries', 'alt.binaries.teevee']:
             url = self.provider.url + 'rss.php?'
-            urlArgs = {'max': 1000,'g': group}
+            urlArgs = {'max': 50, 'g': group}
 
             url += urllib.urlencode(urlArgs)
 
@@ -104,7 +104,7 @@ class BinSearchCache(tvcache.TVCache):
 
             for item in self.getRSSFeed(url)['entries'] or []:
                 ci = self._parseItem(item)
-                if ci is not None:
+                if ci:
                     cl.append(ci)
 
         if len(cl) > 0:

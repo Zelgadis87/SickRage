@@ -21,29 +21,28 @@ import traceback
 
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard.providers import generic
+from sickrage.helper.common import try_int
 from sickbeard.bs4_parser import BS4Parser
+from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class CpasbienProvider(generic.TorrentProvider):
+class CpasbienProvider(TorrentProvider):
 
     def __init__(self):
 
-        generic.TorrentProvider.__init__(self, "Cpasbien")
+        TorrentProvider.__init__(self, "Cpasbien")
 
-        self.supportsBacklog = True
         self.public = True
         self.ratio = None
-        self.url = "http://www.cpasbien.pw"
+        self.minseed = None
+        self.minleech = None
+        self.url = "http://www.cpasbien.io"
 
         self.proper_strings = ['PROPER', 'REPACK']
 
         self.cache = CpasbienCache(self)
 
-    def isEnabled(self):
-        return self.enabled
-
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
+    def search(self, search_params, age=0, ep_obj=None):  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
 
         results = []
         items = {'Season': [], 'Episode': [], 'RSS': []}
@@ -54,53 +53,46 @@ class CpasbienProvider(generic.TorrentProvider):
 
                 if mode != 'RSS':
                     logger.log(u"Search string: %s " % search_string, logger.DEBUG)
+                    searchURL = self.url + '/recherche/' + search_string.replace('.', '-').replace(' ', '-') + '.html'
+                else:
+                    searchURL = self.url + '/view_cat.php?categorie=series&trie=date-d'
 
-                searchURL = self.url + '/recherche/'+search_string.replace('.', '-') + '.html'
-                logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
-                data = self.getURL(searchURL)
+                logger.log(u"Search URL: %s" % searchURL, logger.DEBUG)
+                data = self.get_url(searchURL)
 
                 if not data:
                     continue
 
                 try:
-                    with BS4Parser(data, features=["html5lib", "permissive"]) as html:
-                        lin = erlin = 0
-                        resultdiv = []
-                        while erlin == 0:
+                    with BS4Parser(data, 'html5lib') as html:
+                        line = 0
+                        torrents = []
+                        while True:
+                            resultlin = html.findAll(class_='ligne%i' % line)
+                            if not resultlin:
+                                break
+
+                            torrents += resultlin
+                            line += 1
+
+                        for torrent in torrents:
                             try:
-                                classlin = 'ligne' + str(lin)
-                                resultlin = html.findAll(attrs={'class' : [classlin]})
-                                if resultlin:
-                                    for ele in resultlin:
-                                        resultdiv.append(ele)
-                                    lin += 1
-                                else:
-                                    erlin = 1
-                            except Exception:
-                                erlin = 1
-
-                        for row in resultdiv:
-                            try:
-                                link = row.find("a", title=True)
-                                title = link.text.lower().strip()
-                                pageURL = link['href']
-
-                                #downloadTorrentLink = torrentSoup.find("a", title.startswith('Cliquer'))
-                                tmp = pageURL.split('/')[-1].replace('.html', '.torrent')
-
-                                downloadTorrentLink = ('http://www.cpasbien.pw/telechargement/%s' % tmp)
-
-                                if downloadTorrentLink:
-                                    download_url = downloadTorrentLink
-                                    #FIXME
-                                    size = -1
-                                    seeders = 1
-                                    leechers = 0
-
-                            except (AttributeError, TypeError):
+                                title = torrent.find(class_="titre").get_text(strip=True).replace("HDTV", "HDTV x264-CPasBien")
+                                tmp = torrent.find("a")['href'].split('/')[-1].replace('.html', '.torrent').strip()
+                                download_url = (self.url + '/telechargement/%s' % tmp)
+                                size = self._convertSize(torrent.find(class_="poid").get_text(strip=True))
+                                seeders = try_int(torrent.find(class_="up").get_text(strip=True))
+                                leechers = try_int(torrent.find(class_="down").get_text(strip=True))
+                            except (AttributeError, TypeError, KeyError, IndexError):
                                 continue
 
                             if not all([title, download_url]):
+                                continue
+
+                            # Filter unseeded torrent
+                            if seeders < self.minseed or leechers < self.minleech:
+                                if mode != 'RSS':
+                                    logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
                                 continue
 
                             item = title, download_url, size, seeders, leechers
@@ -109,28 +101,50 @@ class CpasbienProvider(generic.TorrentProvider):
 
                             items[mode].append(item)
 
-                except Exception, e:
+                except Exception:
                     logger.log(u"Failed parsing provider. Traceback: %s" % traceback.format_exc(), logger.ERROR)
 
-            #For each search mode sort all the items by seeders if available
+            # For each search mode sort all the items by seeders if available
             items[mode].sort(key=lambda tup: tup[3], reverse=True)
 
             results += items[mode]
 
         return results
 
-    def seedRatio(self):
+    def seed_ratio(self):
         return self.ratio
+
+    @staticmethod
+    def _convertSize(sizeString):
+        size = sizeString[:-2].strip()
+        modifier = sizeString[-2:].upper()
+        try:
+            size = float(size)
+            if modifier in 'KO':
+                size *= 1024 ** 1
+            elif modifier in 'MO':
+                size *= 1024 ** 2
+            elif modifier in 'GO':
+                size *= 1024 ** 3
+            elif modifier in 'TO':
+                size *= 1024 ** 4
+            else:
+                raise
+        except Exception:
+            size = -1
+
+        return long(size)
+
 
 class CpasbienCache(tvcache.TVCache):
     def __init__(self, provider_obj):
 
         tvcache.TVCache.__init__(self, provider_obj)
 
-        self.minTime = 30
+        self.minTime = 20
 
     def _getRSSData(self):
-        #search_strings = {'RSS': ['']}
-        return {'entries': {}}
+        search_strings = {'RSS': ['']}
+        return {'entries': self.provider.search(search_strings)}
 
 provider = CpasbienProvider()
