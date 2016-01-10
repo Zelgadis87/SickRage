@@ -1993,6 +1993,17 @@ var SICKRAGE = {
                         progress: function (itemElem) {
                             var progress = $(itemElem).attr('data-progress');
                             return progress.length && parseInt(progress, 10) || Number.NEGATIVE_INFINITY;
+                        },
+                        added: function(itemElem) {
+                            var date = $(itemElem).attr('data-added');
+                            return -(date.length && parseInt(date, 10) || Number.POSITIVE_INFINITY);
+                        },
+                        lastseen: function(itemElem) {
+                            var date = $(itemElem).attr('data-lastseen'), ret = Number.POSITIVE_INFINITY;
+                            if (date.length && parseInt(date, 10) > 0) {
+                                ret = -parseInt(date,10);
+                            }
+                            return ret;
                         }
                     }
                 });

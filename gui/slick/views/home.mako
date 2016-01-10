@@ -48,6 +48,8 @@
                         <select id="postersort" class="form-control form-control-inline input-sm">
                             <option value="name" data-sort="${srRoot}/setPosterSortBy/?sort=name" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'name']}>Name</option>
                             <option value="date" data-sort="${srRoot}/setPosterSortBy/?sort=date" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'date']}>Next Episode</option>
+                            <option value="added" data-sort="${srRoot}/setPosterSortBy/?sort=added" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'added']}>Added date</option>
+                            <option value="lastseen" data-sort="${srRoot}/setPosterSortBy/?sort=lastseen" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'lastseen']}>Last seen</option>
                             <option value="network" data-sort="${srRoot}/setPosterSortBy/?sort=network" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'network']}>Network</option>
                             <option value="progress" data-sort="${srRoot}/setPosterSortBy/?sort=progress" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'progress']}>Progress</option>
                         </select>
@@ -91,7 +93,7 @@
 <div class="posterview">
 % for curLoadingShow in sickbeard.showQueueScheduler.action.loadingShowList:
     % if curLoadingShow.show is None:
-        <div class="show-container" data-name="0" data-date="010101" data-network="0" data-progress="101">
+        <div class="show-container" data-name="0" data-date="010101" data-network="0" data-progress="101" data-added="010101" data-lastseen="010101">
             <img alt="" title="${curLoadingShow.show_name}" class="show-image" style="border-bottom: 1px solid #111;" src="data:image/png;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" data-src="${srRoot}/images/poster.png" />
             <div class="show-details">
                 <div class="show-add">Loading... (${curLoadingShow.show_name})</div>
@@ -163,7 +165,7 @@
         elif 'nded' in display_status:
             data_date = '5000000100.0'
 %>
-    <div class="show-container" id="show${curShow.indexerid}" data-name="${curShow.name}" data-date="${data_date}" data-network="${curShow.network}" data-progress="${progressbar_percent}">
+    <div class="show-container" id="show${curShow.indexerid}" data-name="${curShow.name}" data-date="${data_date}" data-added="${curShow.added_date}" data-lastseen="${curShow.last_seen}" data-network="${curShow.network}" data-progress="${progressbar_percent}">
         <div class="show-image">
             <a href="${srRoot}/home/displayShow?show=${curShow.indexerid}"><img alt="" class="show-image" src="data:image/png;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" data-src="${srRoot}/showPoster/?show=${curShow.indexerid}&amp;which=poster_thumb" /></a>
         </div>
