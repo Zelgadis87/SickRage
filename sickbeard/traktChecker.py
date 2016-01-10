@@ -728,6 +728,9 @@ class TraktChecker(object):
                     changes[show_name] = changes.get(show_name, 0) + 1
                     logger.log("Updated " + show_name + ", episode " + str(season) + "x" + str(episode) + ": Episode was watched at " + str(watched))
 
+                    show = Show.find(sickbeard.showList, int(show_id))
+                    show.lastseen = max(show.lastseen, watched)
+
             message = "Watched episodes synchronization complete: ";
             if (len(changes) == 0):
                 message += "No changes detected."
@@ -742,6 +745,7 @@ class TraktChecker(object):
                     first = False;
 
             logger.log(message)
+
             self._updateNextEpisodeData()
 
         except traktException as e:

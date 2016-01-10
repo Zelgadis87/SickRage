@@ -115,6 +115,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
         self.nextaired = ""
         self.release_groups = None
         self.added_date = 0
+        self.last_seen = 0
 
         otherShow = Show.find(sickbeard.showList, self.indexerid)
         if otherShow is not None:
@@ -753,7 +754,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
         logger.log(str(self.indexerid) + u": Loading show info from database", logger.DEBUG)
 
         myDB = db.DBConnection()
-        sqlResults = myDB.select("SELECT * FROM tv_shows WHERE indexer_id = ?", [self.indexerid])
+        sqlResults = myDB.select("SELECT s.*, (SELECT coalesce(max(last_watched),0) FROM tv_episodes e WHERE e.indexer = s.indexer AND e.showid = s.indexer_id) last_seen FROM tv_shows s WHERE s.indexer_id = ?", [self.indexerid])
 
         if len(sqlResults) > 1:
             raise MultipleShowsInDatabaseException()
@@ -794,6 +795,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
             self.stay_ahead = int(sqlResults[0]["stay_ahead"] or 0)
             self.paused = int(sqlResults[0]["paused"] or 0)
             self.added_date = int(sqlResults[0]['added_date'] or 0)
+            self.last_seen = int(sqlResults[0]['last_seen'] or 0)
 
             try:
                 self.location = sqlResults[0]["location"]
