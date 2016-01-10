@@ -1997,6 +1997,13 @@ var SICKRAGE = {
                         added: function(itemElem) {
                             var date = $(itemElem).attr('data-added');
                             return -(date.length && parseInt(date, 10) || Number.POSITIVE_INFINITY);
+                        },
+                        lastseen: function(itemElem) {
+                            var date = $(itemElem).attr('data-lastseen'), ret = Number.POSITIVE_INFINITY;
+                            if (date.length && parseInt(date, 10) > 0) {
+                                ret = -parseInt(date,10);
+                            }
+                            return ret;
                         }
                     }
                 });
