@@ -1134,3 +1134,10 @@ class StayAhead(TraktSync):
 
     def execute(self):
         self.addColumn("tv_shows", "stay_ahead", default=0)
+
+class AddedDate(StayAhead):
+    def test(self):
+        return self.hasColumn("tv_shows", "added_date")
+
+    def execute(self):
+        self.connection.action("ALTER TABLE tv_shows ADD COLUMN added_date INTEGER DEFAULT 0")

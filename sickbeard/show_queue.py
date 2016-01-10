@@ -35,7 +35,7 @@ from sickrage.helper.exceptions import CantRefreshShowException, CantRemoveShowE
 from sickrage.helper.exceptions import EpisodeDeletedException, ex, MultipleShowObjectsException
 from sickrage.helper.exceptions import ShowDirectoryNotFoundException
 from libtrakt import TraktAPI
-
+import time
 
 class ShowQueue(generic_queue.GenericQueue):
     def __init__(self):
@@ -360,6 +360,7 @@ class QueueItemAdd(ShowQueueItem):
             self.show.anime = self.anime if self.anime is not None else sickbeard.ANIME_DEFAULT
             self.show.scene = self.scene if self.scene is not None else sickbeard.SCENE_DEFAULT
             self.show.paused = self.paused if self.paused is not None else False
+            self.show.added_date = int(time.time())
 
             # set up default new/missing episode status
             logger.log(u"Setting all episodes to the specified default status: " + str(self.show.default_ep_status))
