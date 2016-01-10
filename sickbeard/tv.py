@@ -91,6 +91,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
         self._imdb_info = {}
         self._quality = int(sickbeard.QUALITY_DEFAULT)
         self._flatten_folders = int(sickbeard.FLATTEN_FOLDERS_DEFAULT)
+        self.stay_ahead = int(sickbeard.STAY_AHEAD_DEFAULT)
         self._status = "Unknown"
         self._airs = ""
         self._startyear = 0
@@ -789,6 +790,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
             self.dvdorder = int(sqlResults[0]["dvdorder"] or 0)
             self.quality = int(sqlResults[0]["quality"] or UNKNOWN)
             self.flatten_folders = int(sqlResults[0]["flatten_folders"] or 0)
+            self.stay_ahead = int(sqlResults[0]["stay_ahead"] or 0)
             self.paused = int(sqlResults[0]["paused"] or 0)
 
             try:
@@ -1149,6 +1151,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
                         "airs": self.airs,
                         "status": self.status,
                         "flatten_folders": self.flatten_folders,
+                        "stay_ahead": self.stay_ahead,
                         "paused": self.paused,
                         "air_by_date": self.air_by_date,
                         "anime": self.anime,

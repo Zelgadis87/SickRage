@@ -1359,7 +1359,8 @@ class Home(WebRoot):
         return "<br>".join(out)
 
     def editShow(self, show=None, location=None, anyQualities=[], bestQualities=[],
-                 exceptions_list=[], flatten_folders=None, paused=None, directCall=False,
+                 exceptions_list=[], flatten_folders=None, stay_ahead=None,
+				 paused=None, directCall=False,
                  air_by_date=None, sports=None, dvdorder=None, indexerLang=None,
                  subtitles=None, rls_ignore_words=None, rls_require_words=None,
                  anime=None, blacklist=None, whitelist=None, scene=None,
@@ -1416,6 +1417,7 @@ class Home(WebRoot):
                                 controller="home", action="editShow")
 
         flatten_folders = not config.checkbox_to_value(flatten_folders)  # UI inverts this value
+        stay_ahead = helpers.tryInt(stay_ahead, 0)
         dvdorder = config.checkbox_to_value(dvdorder)
         paused = config.checkbox_to_value(paused)
         air_by_date = config.checkbox_to_value(air_by_date)
@@ -1488,6 +1490,7 @@ class Home(WebRoot):
                 except CantRefreshShowException as e:
                     errors.append("Unable to refresh this show: " + ex(e))
 
+            showObj.stay_ahead = stay_ahead
             showObj.paused = paused
             showObj.scene = scene
             showObj.anime = anime
@@ -2665,7 +2668,7 @@ class HomeAddShows(Home):
         return self.redirect('/home/')
 
     def addNewShow(self, whichSeries=None, indexerLang=None, rootDir=None, defaultStatus=None,
-                   quality_preset=None, anyQualities=None, bestQualities=None, flatten_folders=None, subtitles=None,
+                   quality_preset=None, anyQualities=None, bestQualities=None, flatten_folders=None, stay_ahead=0, subtitles=None,
                    fullShowPath=None, other_shows=None, skipShow=None, providedIndexer=None, anime=None,
                    scene=None, blacklist=None, whitelist=None, defaultStatusAfter=None):
         """
@@ -2754,6 +2757,7 @@ class HomeAddShows(Home):
         scene = config.checkbox_to_value(scene)
         anime = config.checkbox_to_value(anime)
         flatten_folders = config.checkbox_to_value(flatten_folders)
+        stay_ahead = int(stay_ahead)
         subtitles = config.checkbox_to_value(subtitles)
 
         if whitelist:
@@ -2773,7 +2777,7 @@ class HomeAddShows(Home):
 
         # add the show
         sickbeard.showQueueScheduler.action.addShow(indexer, indexer_id, show_dir, int(defaultStatus), newQuality,
-                                                    flatten_folders, indexerLang, subtitles, anime,
+                                                    flatten_folders, stay_ahead, indexerLang, subtitles, anime,
                                                     scene, None, blacklist, whitelist, int(defaultStatusAfter))
         ui.notifications.message('Show added', 'Adding the specified show into ' + show_dir)
 
@@ -3718,7 +3722,8 @@ class ConfigGeneral(Config):
         sickbeard.ROOT_DIRS = rootDirString
 
     @staticmethod
-    def saveAddShowDefaults(defaultStatus, anyQualities, bestQualities, defaultFlattenFolders, subtitles=False,
+    def saveAddShowDefaults(defaultStatus, anyQualities, bestQualities, defaultFlattenFolders, defaultStayAhead=0,
+    						subtitles=False,
                             anime=False, scene=False, defaultStatusAfter=WANTED):
 
         if anyQualities:
@@ -3738,6 +3743,7 @@ class ConfigGeneral(Config):
         sickbeard.QUALITY_DEFAULT = int(newQuality)
 
         sickbeard.FLATTEN_FOLDERS_DEFAULT = config.checkbox_to_value(defaultFlattenFolders)
+        sickbeard.STAY_AHEAD_DEFAULT = int(defaultStayAhead)
         sickbeard.SUBTITLES_DEFAULT = config.checkbox_to_value(subtitles)
 
         sickbeard.ANIME_DEFAULT = config.checkbox_to_value(anime)
@@ -4765,7 +4771,7 @@ class ConfigNotifications(Config):
                           use_nmjv2=None, nmjv2_host=None, nmjv2_dbloc=None, nmjv2_database=None,
                           use_trakt=None, trakt_username=None, trakt_pin=None,
                           trakt_remove_watchlist=None, trakt_sync_watchlist=None, trakt_remove_show_from_sickrage=None, trakt_method_add=None,
-                          trakt_start_paused=None, trakt_use_recommended=None, trakt_sync=None, trakt_sync_remove=None,
+                          trakt_start_paused=None, trakt_use_recommended=None, trakt_sync=None, trakt_sync_remove=None, trakt_sync_watched=None,
                           trakt_default_indexer=None, trakt_remove_serieslist=None, trakt_timeout=None, trakt_blacklist_name=None,
                           use_synologynotifier=None, synologynotifier_notify_onsnatch=None,
                           synologynotifier_notify_ondownload=None, synologynotifier_notify_onsubtitledownload=None,
@@ -4895,6 +4901,7 @@ class ConfigNotifications(Config):
         sickbeard.TRAKT_USE_RECOMMENDED = config.checkbox_to_value(trakt_use_recommended)
         sickbeard.TRAKT_SYNC = config.checkbox_to_value(trakt_sync)
         sickbeard.TRAKT_SYNC_REMOVE = config.checkbox_to_value(trakt_sync_remove)
+        sickbeard.TRAKT_SYNC_WATCHED = config.checkbox_to_value(trakt_sync_watched)
         sickbeard.TRAKT_DEFAULT_INDEXER = int(trakt_default_indexer)
         sickbeard.TRAKT_TIMEOUT = int(trakt_timeout)
         sickbeard.TRAKT_BLACKLIST_NAME = trakt_blacklist_name

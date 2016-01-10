@@ -50,6 +50,15 @@
             </label>
         </div>
 
+        <div class="field-pair">
+            <label for="stay_ahead" class="clearfix">
+                <span class="component-title">How many episodes to get ahead of the latest one:</span>
+                <span class="component-desc">
+                    <input class="form-control form-control-inline input-sm" type="number" min="0" name="stay_ahead" id="stay_ahead" value="${sickbeard.STAY_AHEAD_DEFAULT}" style="width: 100px;" />
+                </span>
+            </label>
+        </div>
+
 % if enable_anime_options:
         <div class="field-pair alt">
             <label for="anime" class="clearfix">

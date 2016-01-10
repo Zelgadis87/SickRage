@@ -1485,7 +1485,8 @@ class CMD_SickBeardGetDefaults(ApiCall):
 
         data = {"status": statusStrings[sickbeard.STATUS_DEFAULT].lower(),
                 "flatten_folders": int(sickbeard.FLATTEN_FOLDERS_DEFAULT), "initial": any_qualities,
-                "archive": best_qualities, "future_show_paused": int(sickbeard.COMING_EPS_DISPLAY_PAUSED)}
+                "archive": best_qualities, "future_show_paused": int(sickbeard.COMING_EPS_DISPLAY_PAUSED),
+                "stay_ahead": int(sickbeard.STAY_AHEAD_DEFAULT)}
         return _responds(RESULT_SUCCESS, data)
 
 
@@ -1718,6 +1719,7 @@ class CMD_SickBeardSetDefaults(ApiCall):
             "archive": {"desc": "The archive quality of a show"},
             "future_show_paused": {"desc": "True to list paused shows in the coming episode, False otherwise"},
             "flatten_folders": {"desc": "Flatten sub-folders within the show directory"},
+            "stay_ahead": {"desc": "How many episodes to download ahead of the latest watched one"},
             "status": {"desc": "Status of missing episodes"},
         }
     }
@@ -1733,6 +1735,7 @@ class CMD_SickBeardSetDefaults(ApiCall):
                                                 "fullhdwebdl", "hdbluray", "fullhdbluray"])
         self.future_show_paused, args = self.check_params(args, kwargs, "future_show_paused", None, False, "bool", [])
         self.flatten_folders, args = self.check_params(args, kwargs, "flatten_folders", None, False, "bool", [])
+        self.stay_ahead, args = self.check_params(args, kwargs, "stay_ahead", 0, False, "int", False)
         self.status, args = self.check_params(args, kwargs, "status", None, False, "string",
                                               ["wanted", "skipped", "ignored"])
         # super, missing, help
@@ -1781,6 +1784,9 @@ class CMD_SickBeardSetDefaults(ApiCall):
 
         if self.flatten_folders is not None:
             sickbeard.FLATTEN_FOLDERS_DEFAULT = int(self.flatten_folders)
+
+        if self.stay_ahead is not None:
+            sickbeard.STAY_AHEAD_DEFAULT = int(self.stay_ahead)
 
         if self.future_show_paused is not None:
             sickbeard.COMING_EPS_DISPLAY_PAUSED = int(self.future_show_paused)

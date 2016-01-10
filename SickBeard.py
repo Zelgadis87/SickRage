@@ -245,6 +245,10 @@ class SickRage(object):
             if o in ('--noresize',):
                 sickbeard.NO_RESIZE = True
 
+            if o in ('--locale',):
+                # set the given locale for the time settings.
+                locale.setlocale(locale.LC_TIME, str(a))
+
         # The pidfile is only useful in daemon mode, make sure we can write the file properly
         if self.CREATEPID:
             if self.runAsDaemon:

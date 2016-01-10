@@ -141,14 +141,14 @@ class ShowQueue(generic_queue.GenericQueue):
 
         return queueItemObj
 
-    def addShow(self, indexer, indexer_id, showDir, default_status=None, quality=None, flatten_folders=None,
+    def addShow(self, indexer, indexer_id, showDir, default_status=None, quality=None, flatten_folders=None, stay_ahead=0,
                 lang=None, subtitles=None, anime=None, scene=None, paused=None, blacklist=None, whitelist=None, default_status_after=None):
 
         if lang is None:
             lang = sickbeard.INDEXER_DEFAULT_LANGUAGE
 
         queueItemObj = QueueItemAdd(indexer, indexer_id, showDir, default_status, quality, flatten_folders, lang,
-                                    subtitles, anime, scene, paused, blacklist, whitelist, default_status_after)
+                                    subtitles, anime, scene, paused, blacklist, whitelist, default_status_after, stay_ahead)
 
         self.add_item(queueItemObj)
 
@@ -226,7 +226,7 @@ class ShowQueueItem(generic_queue.QueueItem):
 
 class QueueItemAdd(ShowQueueItem):
     def __init__(self, indexer, indexer_id, showDir, default_status, quality, flatten_folders, lang, subtitles, anime,
-                 scene, paused, blacklist, whitelist, default_status_after):
+                 scene, paused, blacklist, whitelist, default_status_after, stay_ahead):
 
         self.indexer = indexer
         self.indexer_id = indexer_id
@@ -242,6 +242,7 @@ class QueueItemAdd(ShowQueueItem):
         self.blacklist = blacklist
         self.whitelist = whitelist
         self.default_status_after = default_status_after
+        self.stay_ahead = stay_ahead
 
         self.show = None
 
@@ -355,6 +356,7 @@ class QueueItemAdd(ShowQueueItem):
             self.show.subtitles = self.subtitles if self.subtitles is not None else sickbeard.SUBTITLES_DEFAULT
             self.show.quality = self.quality if self.quality else sickbeard.QUALITY_DEFAULT
             self.show.flatten_folders = self.flatten_folders if self.flatten_folders is not None else sickbeard.FLATTEN_FOLDERS_DEFAULT
+            self.show.stay_ahead = self.stay_ahead if self.stay_ahead is not None else sickbeard.STAY_AHEAD_DEFAULT
             self.show.anime = self.anime if self.anime is not None else sickbeard.ANIME_DEFAULT
             self.show.scene = self.scene if self.scene is not None else sickbeard.SCENE_DEFAULT
             self.show.paused = self.paused if self.paused is not None else False
