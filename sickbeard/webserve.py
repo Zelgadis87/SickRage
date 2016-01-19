@@ -1417,7 +1417,7 @@ class Home(WebRoot):
                                 controller="home", action="editShow")
 
         flatten_folders = not config.checkbox_to_value(flatten_folders)  # UI inverts this value
-        stay_ahead = helpers.tryInt(stay_ahead, 0)
+        stay_ahead = try_int(stay_ahead, 0)
         dvdorder = config.checkbox_to_value(dvdorder)
         paused = config.checkbox_to_value(paused)
         air_by_date = config.checkbox_to_value(air_by_date)
