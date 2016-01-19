@@ -28,7 +28,9 @@
     <div class="trakt_show" data-name="${cur_show['show']['title']}" data-rating="${cur_show['show']['rating']}" data-votes="${cur_show['show']['votes']}">
         <div class="traktContainer">
             <div class="trakt-image">
-                <a class="trakt-image" href="${anon_url(show_url)}" target="_blank"><img alt="" class="trakt-image" src="${poster_url}" /></a>
+                <a class="trakt-image" href="${anon_url(show_url)}" target="_blank">
+                    <img alt="" class="trakt-image" src="${poster_url}" height="273px" width="186px" />
+                </a>
             </div>
 
             <div class="show-title">
@@ -39,7 +41,7 @@
             <p>${int(cur_show['show']['rating']*10)}% <img src="${srRoot}/images/heart.png"></p>
             <i>${cur_show['show']['votes']} votes</i>
             <div class="traktShowTitleIcons">
-                <a href="${srRoot}/addShows/addShowByID?indexer_id=${cur_show['show']['ids']['tvdb']}&amp;show_name=${cur_show['show']['title']}" class="btn btn-xs" data-no-redirect>Add Show</a>
+                <a href="${srRoot}/addShows/addShowByID?indexer_id=${cur_show['show']['ids']['tvdb']}&amp;show_name=${cur_show['show']['title'] | u}" class="btn btn-xs" data-no-redirect>Add Show</a>
                 % if blacklist:
                 <a href="${srRoot}/addShows/addShowToBlacklist?indexer_id=${cur_show['show']['ids']['tvdb'] or cur_show['show']['ids']['tvrage']}" class="btn btn-xs">Remove Show</a>
                 % endif
