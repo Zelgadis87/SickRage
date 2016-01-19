@@ -12,11 +12,11 @@
 #
 # SickRage is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
+# along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
 import httplib
 import urllib
@@ -439,7 +439,7 @@ class KODINotifier(object):
             logger.log(u"Updating library in KODI via JSON method for show " + showName, logger.DEBUG)
 
             # let's try letting kodi filter the shows
-            showsCommand = '{"jsonrpc":"2.0","method":"VideoLibrary.GetTVShows","params":{"filter":{"field":"title","operator":"is","value":"%s"},"properties":["title",]},"id":"SickRage"}'
+            showsCommand = '{"jsonrpc":"2.0","method":"VideoLibrary.GetTVShows","params":{"filter":{"field":"title","operator":"is","value":"%s"},"properties":["title"]},"id":"SickRage"}'
 
             # get tvshowid by showName
             showsResponse = self._send_to_kodi_json(showsCommand % showName, host)

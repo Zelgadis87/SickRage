@@ -12,14 +12,15 @@
 #
 # SickRage is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
+# along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
 import datetime
 
+import warnings
 import sickbeard
 import os.path
 
@@ -1141,3 +1142,33 @@ class AddedDate(StayAhead):
 
     def execute(self):
         self.connection.action("ALTER TABLE tv_shows ADD COLUMN added_date INTEGER DEFAULT 0")
+
+class AddMinorVersion(AddedDate):
+    def test(self):
+        return self.checkDBVersion() >= 42 and self.hasColumn(b'db_version', b'db_minor_version')
+
+    def incDBVersion(self):
+        warnings.warn("Deprecated: Use inc_major_version or inc_minor_version instead", DeprecationWarning)
+
+    def inc_major_version(self):
+        major_version, minor_version = self.connection.version
+        major_version += 1
+        minor_version = 0
+        self.connection.action("UPDATE db_version SET db_version = ?, db_minor_version = ?", [major_version, minor_version])
+        return self.connection.version
+
+    def inc_minor_version(self):
+        major_version, minor_version = self.connection.version
+        minor_version += 1
+        self.connection.action("UPDATE db_version SET db_version = ?, db_minor_version = ?", [major_version, minor_version])
+        return self.connection.version
+
+    def execute(self):
+        backupDatabase(self.checkDBVersion())
+
+        logger.log(u"Add minor version numbers to database")
+        self.addColumn(b'db_version', b'db_minor_version')
+
+        self.inc_minor_version()
+
+        logger.log('Updated to: %d.%d' % self.connection.version)
