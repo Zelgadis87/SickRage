@@ -729,7 +729,7 @@ class TraktChecker(object):
                     logger.log("Updated " + show_name + ", episode " + str(season) + "x" + str(episode) + ": Episode was watched at " + str(watched))
 
                     show = Show.find(sickbeard.showList, int(show_id))
-                    show.lastseen = max(show.lastseen, watched)
+                    show.last_seen = max(show.last_seen, watched)
 
             message = "Watched episodes synchronization complete: ";
             if (len(changes) == 0):
