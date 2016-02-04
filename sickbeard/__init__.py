@@ -1439,7 +1439,7 @@ def initialize(consoleLogging=True):
                                                          silent=not PROCESS_AUTOMATICALLY)
 
         traktCheckerScheduler = scheduler.Scheduler(traktChecker.TraktChecker(),
-                                                    cycleTime=datetime.timedelta(hours=1),
+                                                    cycleTime=datetime.timedelta(hours=4),
                                                     threadName="TRAKTCHECKER",
                                                     silent=not USE_TRAKT)
 
