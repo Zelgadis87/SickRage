@@ -1,6 +1,7 @@
 # coding=utf-8
-# Author: duramato <matigonkas@outlook.com>
-# URL: https://github.com/SickRage/sickrage
+# Author: Gonçalo M. (aka duramato/supergonkas) <supergonkas@gmail.com>
+#
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -17,17 +18,20 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-import posixpath # Must use posixpath
+import posixpath  # Must use posixpath
 from urllib import quote_plus
-from sickbeard import logger
-from sickbeard import tvcache
+
+from sickbeard import logger, tvcache
 from sickbeard.common import USER_AGENT
-from sickrage.helper.common import try_int, convert_size
+
+from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
-class TorrentProjectProvider(TorrentProvider):
+class TorrentProjectProvider(TorrentProvider):  # pylint: disable=too-many-instance-attributes
+
     def __init__(self):
+
         TorrentProvider.__init__(self, "TorrentProject")
 
         self.public = True
@@ -38,9 +42,9 @@ class TorrentProjectProvider(TorrentProvider):
         self.headers.update({'User-Agent': USER_AGENT})
         self.minseed = None
         self.minleech = None
-        self.cache = TorrentProjectCache(self)
+        self.cache = tvcache.TVCache(self, search_params={'RSS': ['0day']})
 
-    def search(self, search_strings, age=0, ep_obj=None):
+    def search(self, search_strings, age=0, ep_obj=None):  # pylint: disable=too-many-locals
         results = []
         for mode in search_strings:  # Mode = RSS, Season, Episode
             items = []
@@ -51,7 +55,7 @@ class TorrentProjectProvider(TorrentProvider):
 
                 search_url = self.urls['api'] + "?s=%s&out=json&filter=2101&num=150" % quote_plus(search_string.encode('utf-8'))
                 if self.custom_url:
-                    search_url = posixpath.join(self.custom_url, search_url.split(self.url)[1].lstrip('/')) # Must use posixpath
+                    search_url = posixpath.join(self.custom_url, search_url.split(self.url)[1].lstrip('/'))  # Must use posixpath
 
                 logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
                 torrents = self.get_url(search_url, json=True)
@@ -81,7 +85,7 @@ class TorrentProjectProvider(TorrentProvider):
                         logger.log(u"Torrent has less than 10 seeds getting dyn trackers: " + title, logger.DEBUG)
                         trackerUrl = self.urls['api'] + "" + t_hash + "/trackers_json"
                         if self.custom_url:
-                            search_url = posixpath.join(self.custom_url, search_url.split(self.url)[1].lstrip('/')) # Must use posixpath
+                            search_url = posixpath.join(self.custom_url, search_url.split(self.url)[1].lstrip('/'))  # Must use posixpath
                         jdata = self.get_url(trackerUrl, json=True)
                         assert jdata != "maintenance"
                         download_url = "magnet:?xt=urn:btih:" + t_hash + "&dn=" + title + "".join(["&tr=" + s for s in jdata])
@@ -107,18 +111,5 @@ class TorrentProjectProvider(TorrentProvider):
 
     def seed_ratio(self):
         return self.ratio
-
-
-class TorrentProjectCache(tvcache.TVCache):
-    def __init__(self, provider_obj):
-
-        tvcache.TVCache.__init__(self, provider_obj)
-
-        self.minTime = 20
-
-    def _getRSSData(self):
-
-        search_params = {'RSS': ['0day']}
-        return {'entries': self.provider.search(search_params)}
 
 provider = TorrentProjectProvider()

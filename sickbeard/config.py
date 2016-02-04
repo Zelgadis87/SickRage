@@ -683,8 +683,8 @@ class ConfigMigrator(object):
         sickbeard.NAMING_MULTI_EP = int(check_setting_int(self.config_obj, 'General', 'naming_multi_ep_type', 1))
 
         # see if any of their shows used season folders
-        myDB = db.DBConnection()
-        season_folder_shows = myDB.select("SELECT indexer_id FROM tv_shows WHERE flatten_folders = 0 LIMIT 1")
+        main_db_con = db.DBConnection()
+        season_folder_shows = main_db_con.select("SELECT indexer_id FROM tv_shows WHERE flatten_folders = 0 LIMIT 1")
 
         # if any shows had season folders on then prepend season folder to the pattern
         if season_folder_shows:
@@ -710,7 +710,7 @@ class ConfigMigrator(object):
             logger.log(u"No shows were using season folders before so I'm disabling flattening on all shows")
 
             # don't flatten any shows at all
-            myDB.action("UPDATE tv_shows SET flatten_folders = 0")
+            main_db_con.action("UPDATE tv_shows SET flatten_folders = 0")
 
         sickbeard.NAMING_FORCE_FOLDERS = naming.check_force_season_folders()
 
@@ -743,7 +743,7 @@ class ConfigMigrator(object):
             ep_quality = '%QN'
             abd_string = '%A-D'
 
-        if abd:
+        if abd and abd_string:
             ep_string = abd_string
         else:
             ep_string = naming_ep_type[ep_type]
@@ -751,18 +751,18 @@ class ConfigMigrator(object):
         finalName = ""
 
         # start with the show name
-        if use_show_name:
+        if use_show_name and show_name:
             finalName += show_name + naming_sep_type[sep_type]
 
         # add the season/ep stuff
         finalName += ep_string
 
         # add the episode name
-        if use_ep_name:
+        if use_ep_name and ep_name:
             finalName += naming_sep_type[sep_type] + ep_name
 
         # add the quality
-        if use_quality:
+        if use_quality and ep_quality:
             finalName += naming_sep_type[sep_type] + ep_quality
 
         if use_periods:

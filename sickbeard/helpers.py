@@ -52,7 +52,7 @@ from sickbeard import logger, classes
 from sickbeard.common import USER_AGENT
 from sickbeard import db
 from sickbeard.notifiers import synoindex_notifier
-from sickrage.helper.common import http_code_description, media_extensions, pretty_file_size, subtitle_extensions
+from sickrage.helper.common import http_code_description, media_extensions, pretty_file_size, subtitle_extensions, episode_num
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
 from sickrage.show.Show import Show
@@ -62,7 +62,6 @@ import shutil
 import shutil_custom
 
 import xml.etree.ElementTree as ET
-import json
 
 shutil.copyfile = shutil_custom.copyfile_custom
 
@@ -698,15 +697,18 @@ def get_absolute_number_from_season_and_episode(show, season, episode):
     absolute_number = None
 
     if season and episode:
-        myDB = db.DBConnection()
+        main_db_con = db.DBConnection()
         sql = "SELECT * FROM tv_episodes WHERE showid = ? and season = ? and episode = ?"
-        sqlResults = myDB.select(sql, [show.indexerid, season, episode])
+        sql_results = main_db_con.select(sql, [show.indexerid, season, episode])
 
-        if len(sqlResults) == 1:
-            absolute_number = int(sqlResults[0]["absolute_number"])
-            logger.log(u"Found absolute number %s for show %s S%02dE%02d" % (absolute_number, show.name, season, episode), logger.DEBUG)
+        if len(sql_results) == 1:
+            absolute_number = int(sql_results[0]["absolute_number"])
+            logger.log(u"Found absolute number {absolute} for show {show} {ep}".format
+                       (absolute=absolute_number, show=show.name,
+                        ep=episode_num(season, episode)), logger.DEBUG)
         else:
-            logger.log(u"No entries for absolute number for show %s S%02dE%02d" % (show.name, season, episode), logger.DEBUG)
+            logger.log(u"No entries for absolute number for show {show} {ep}".format
+                       (show=show.name, ep=episode_num(season, episode)), logger.DEBUG)
 
     return absolute_number
 
@@ -1274,13 +1276,13 @@ def mapIndexersToShow(showObj):
     for indexer in sickbeard.indexerApi().indexers:
         mapped[indexer] = showObj.indexerid if int(indexer) == int(showObj.indexer) else 0
 
-    myDB = db.DBConnection()
-    sqlResults = myDB.select(
+    main_db_con = db.DBConnection()
+    sql_results = main_db_con.select(
         "SELECT * FROM indexer_mapping WHERE indexer_id = ? AND indexer = ?",
         [showObj.indexerid, showObj.indexer])
 
     # for each mapped entry
-    for curResult in sqlResults:
+    for curResult in sql_results:
         nlist = [i for i in curResult if i is not None]
         # Check if its mapped with both tvdb and tvrage.
         if len(nlist) >= 4:
@@ -1318,8 +1320,8 @@ def mapIndexersToShow(showObj):
                     [showObj.indexerid, showObj.indexer, int(mapped_show[0]['id']), indexer]])
 
         if len(sql_l) > 0:
-            myDB = db.DBConnection()
-            myDB.mass_action(sql_l)
+            main_db_con = db.DBConnection()
+            main_db_con.mass_action(sql_l)
 
     return mapped
 
@@ -1447,24 +1449,27 @@ def getURL(url, post_data=None, params=None, headers=None, timeout=30, session=N
             return None
 
     except (SocketTimeout, TypeError) as e:
-        logger.log(u"Connection timed out (sockets) accessing getURL %s Error: %r" % (url, ex(e)), logger.WARNING)
+        logger.log(u"Connection timed out (sockets) accessing getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
         return None
-    except requests.exceptions.HTTPError as e:
-        logger.log(u"HTTP error in getURL %s Error: %r" % (url, ex(e)), logger.WARNING)
+    except (requests.exceptions.HTTPError, requests.exceptions.TooManyRedirects) as e:
+        logger.log(u"HTTP error in getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
         return None
     except requests.exceptions.ConnectionError as e:
-        logger.log(u"Connection error to getURL %s Error: %r" % (url, ex(e)), logger.WARNING)
+        logger.log(u"Connection error to getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
         return None
     except requests.exceptions.Timeout as e:
-        logger.log(u"Connection timed out accessing getURL %s Error: %r" % (url, ex(e)), logger.WARNING)
+        logger.log(u"Connection timed out accessing getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
         return None
     except requests.exceptions.ContentDecodingError:
         logger.log(u"Content-Encoding was gzip, but content was not compressed. getURL: %s" % url, logger.DEBUG)
         logger.log(traceback.format_exc(), logger.DEBUG)
         return None
     except Exception as e:
-        logger.log(u"Unknown exception in getURL %s Error: %r" % (url, ex(e)), logger.WARNING)
-        logger.log(traceback.format_exc(), logger.WARNING)
+        if e.errno != errno.ECONNRESET:
+            logger.log(u"Unknown exception in getURL %s Error: %r" % (url, ex(e)), logger.ERROR)
+            logger.log(traceback.format_exc(), logger.DEBUG)
+        else:
+            logger.log(u"Connection reseted by peer accessing getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
         return None
 
     return (resp.text, resp.content)[need_bytes] if not json else resp.json()
@@ -1506,7 +1511,7 @@ def download_file(url, filename, session=None, headers=None):
         remove_file_failed(filename)
         logger.log(u"Connection timed out (sockets) while loading download URL %s Error: %r" % (url, ex(e)), logger.WARNING)
         return None
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, requests.exceptions.TooManyRedirects) as e:
         remove_file_failed(filename)
         logger.log(u"HTTP error %r while loading download URL %s " % (ex(e), url), logger.WARNING)
         return False
@@ -1524,7 +1529,8 @@ def download_file(url, filename, session=None, headers=None):
         return False
     except Exception:
         remove_file_failed(filename)
-        logger.log(u"Unknown exception while loading download URL %s : %r" % (url, traceback.format_exc()), logger.WARNING)
+        logger.log(u"Unknown exception while loading download URL %s : %r" % (url, traceback.format_exc()), logger.ERROR)
+        logger.log(traceback.format_exc(), logger.DEBUG)
         return False
 
     return True
@@ -1769,6 +1775,21 @@ def getTVDBFromID(indexer_id, indexer):
     else:
         return tvdb_id
 
+
+def get_showname_from_indexer(indexer, indexer_id, lang='en'):
+    lINDEXER_API_PARMS = sickbeard.indexerApi(indexer).api_params.copy()
+    if lang:
+        lINDEXER_API_PARMS['language'] = lang
+
+    logger.log(u"" + str(sickbeard.indexerApi(indexer).name) + ": " + repr(lINDEXER_API_PARMS))
+
+    t = sickbeard.indexerApi(indexer).indexer(**lINDEXER_API_PARMS)
+    s = t[int(indexer_id)]
+
+    if hasattr(s,'data'):
+        return s.data.get('seriesname')
+
+    return None
 
 def is_ip_private(ip):
     priv_lo = re.compile(r"^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
