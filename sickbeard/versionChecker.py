@@ -219,8 +219,8 @@ class CheckVersion(object):
 
             match = re.search(r"MAX_DB_VERSION\s=\s(?P<version>\d{2,3})", response)
             branchDestDBversion = int(match.group('version'))
-            myDB = db.DBConnection()
-            branchCurrDBversion = myDB.checkDBVersion()
+            main_db_con = db.DBConnection()
+            branchCurrDBversion = main_db_con.checkDBVersion()
             if branchDestDBversion > branchCurrDBversion:
                 return 'upgrade'
             elif branchDestDBversion == branchCurrDBversion:
@@ -374,7 +374,7 @@ class GitUpdateManager(UpdateManager):
         return self._newest_commit_hash
 
     def get_cur_version(self):
-        return self._run_git(self._git_path, "describe --abbrev=0 " + self._cur_commit_hash)[0]
+        return self._run_git(self._git_path, 'describe --abbrev=0 {}'.format(self._cur_commit_hash))[0]
 
     def get_newest_version(self):
         if self._newest_commit_hash:
@@ -529,7 +529,7 @@ class GitUpdateManager(UpdateManager):
         self.update_remote_origin()
 
         # get all new info from github
-        output, _, exit_status = self._run_git(self._git_path, 'fetch %s' % sickbeard.GIT_REMOTE)
+        output, _, exit_status = self._run_git(self._git_path, 'fetch %s %s' % (sickbeard.GIT_REMOTE, self.branch))
         if not exit_status == 0:
             logger.log(u"Unable to contact github, can't check for update", logger.WARNING)
             return

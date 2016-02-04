@@ -1,6 +1,7 @@
 # coding=utf-8
 # Author: Dustyn Gibson <miigotu@gmail.com>
-# URL: https://github.com/SickRage/SickRage
+#
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -18,12 +19,13 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
 import re
-import traceback
 from six.moves import urllib
-from sickbeard import logger
-from sickbeard import tvcache
-from sickbeard.common import USER_AGENT
+import traceback
+
+from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
+from sickbeard.common import USER_AGENT
+
 from sickrage.helper.common import convert_size
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
@@ -33,12 +35,13 @@ class TorrentzProvider(TorrentProvider):  # pylint: disable=too-many-instance-at
     def __init__(self):
 
         TorrentProvider.__init__(self, "Torrentz")
+
         self.public = True
         self.confirmed = True
         self.ratio = None
         self.minseed = None
         self.minleech = None
-        self.cache = TorrentzCache(self)
+        self.cache = tvcache.TVCache(self, min_time=15)  # only poll Torrentz every 15 minutes max
         self.headers.update({'User-Agent': USER_AGENT})
         self.urls = {'verified': 'https://torrentz.eu/feed_verified',
                      'feed': 'https://torrentz.eu/feed',
@@ -58,10 +61,15 @@ class TorrentzProvider(TorrentProvider):  # pylint: disable=too-many-instance-at
 
         for mode in search_strings:
             items = []
+            logger.log(u"Search Mode: %s" % mode, logger.DEBUG)
             for search_string in search_strings[mode]:
                 search_url = self.urls['verified'] if self.confirmed else self.urls['feed']
                 if mode != 'RSS':
+                    logger.log(u"Search string: %s " % search_string, logger.DEBUG)
+
                     search_url += '?q=' + urllib.parse.quote_plus(search_string)
+
+                logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
 
                 data = self.get_url(search_url)
                 if not data:
@@ -104,18 +112,5 @@ class TorrentzProvider(TorrentProvider):  # pylint: disable=too-many-instance-at
             results += items
 
         return results
-
-
-class TorrentzCache(tvcache.TVCache):
-
-    def __init__(self, provider_obj):
-
-        tvcache.TVCache.__init__(self, provider_obj)
-
-        # only poll every 15 minutes max
-        self.minTime = 15
-
-    def _getRSSData(self):
-        return {'entries': self.provider.search({'RSS': ['']})}
 
 provider = TorrentzProvider()

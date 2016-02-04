@@ -1,5 +1,6 @@
 # coding=utf-8
 # Author: Dustyn Gibson <miigotu@gmail.com>
+#
 # URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
@@ -17,20 +18,21 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-import time
 import datetime
+import time
 from urllib import urlencode
 
 from sickbeard import logger, tvcache
 from sickbeard.indexers.indexer_config import INDEXER_TVDB
-from sickrage.helper.common import try_int
-from sickrage.helper.common import convert_size
+
+from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
 class RarbgProvider(TorrentProvider):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self):
+
         TorrentProvider.__init__(self, "Rarbg")
 
         self.public = True
@@ -48,7 +50,7 @@ class RarbgProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
 
         self.proper_strings = ['{{PROPER|REPACK}}']
 
-        self.cache = RarbgCache(self)
+        self.cache = tvcache.TVCache(self, min_time=10)  # only poll RARBG every 10 minutes max
 
     def login(self):
         if self.token and self.token_expires and datetime.datetime.now() < self.token_expires:
@@ -76,9 +78,9 @@ class RarbgProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
 
         search_params = {
             'app_id': 'sickrage2',
-            'categories': 'tv',
-            'seeders': try_int(self.minseed),
-            'leechers': try_int(self.minleech),
+            'category': 'tv',
+            'min_seeders': try_int(self.minseed),
+            'min_leechers': try_int(self.minleech),
             'limit': 100,
             'format': 'json_extended',
             'ranked': try_int(self.ranked),
@@ -96,13 +98,13 @@ class RarbgProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
             items = []
             logger.log(u"Search Mode: %s" % mode, logger.DEBUG)
             if mode == 'RSS':
-                search_params['sorting'] = 'last'
+                search_params['sort'] = 'last'
                 search_params['mode'] = 'list'
                 search_params.pop('search_string', None)
                 search_params.pop('search_tvdb', None)
             else:
 
-                search_params['sorting'] = self.sorting if self.sorting else 'seeders'
+                search_params['sort'] = self.sorting if self.sorting else 'seeders'
                 search_params['mode'] = 'search'
 
                 if ep_indexer == INDEXER_TVDB and ep_indexerid:
@@ -137,7 +139,7 @@ class RarbgProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
 
                     item = title, download_url, size, seeders, leechers
                     if mode != 'RSS':
-                        logger.log(u"Found result: %s " % title, logger.DEBUG)
+                        logger.log(u"Found result: %s with %s seeders and %s leechers" % (title, seeders, leechers), logger.DEBUG)
                     items.append(item)
 
                 time.sleep(10)
@@ -150,19 +152,5 @@ class RarbgProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
 
     def seed_ratio(self):
         return self.ratio
-
-
-class RarbgCache(tvcache.TVCache):
-    def __init__(self, provider_obj):
-
-        tvcache.TVCache.__init__(self, provider_obj)
-
-        # only poll RARBG every 10 minutes max
-        self.minTime = 10
-
-    def _getRSSData(self):
-        search_strings = {'RSS': ['']}
-        return {'entries': self.provider.search(search_strings)}
-
 
 provider = RarbgProvider()

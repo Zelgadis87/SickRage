@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-
+import os
 import traceback
 
 import sickbeard
@@ -34,7 +34,11 @@ from sickbeard.blackandwhitelist import BlackAndWhiteList
 from sickrage.helper.exceptions import CantRefreshShowException, CantRemoveShowException, CantUpdateShowException
 from sickrage.helper.exceptions import EpisodeDeletedException, ex, MultipleShowObjectsException
 from sickrage.helper.exceptions import ShowDirectoryNotFoundException
+from sickbeard.helpers import get_showname_from_indexer
 from libtrakt import TraktAPI
+from sickrage.helper.encoding import ek
+from sickbeard.helpers import makeDir, chmodAsParent
+from sickrage.helper.common import sanitize_filename
 import time
 
 class ShowQueue(generic_queue.GenericQueue):
@@ -142,31 +146,38 @@ class ShowQueue(generic_queue.GenericQueue):
         return queueItemObj
 
     def addShow(self, indexer, indexer_id, showDir, default_status=None, quality=None, flatten_folders=None, stay_ahead=0,
-                lang=None, subtitles=None, anime=None, scene=None, paused=None, blacklist=None, whitelist=None, default_status_after=None):
+                lang=None, subtitles=None, anime=None, scene=None, paused=None, blacklist=None, whitelist=None, 
+                default_status_after=None, root_dir=None):
 
         if lang is None:
             lang = sickbeard.INDEXER_DEFAULT_LANGUAGE
 
         queueItemObj = QueueItemAdd(indexer, indexer_id, showDir, default_status, quality, flatten_folders, lang,
-                                    subtitles, anime, scene, paused, blacklist, whitelist, default_status_after, stay_ahead)
+                                    subtitles, anime, scene, paused, blacklist, whitelist, default_status_after, stay_ahead, root_dir)
 
         self.add_item(queueItemObj)
 
         return queueItemObj
 
     def removeShow(self, show, full=False):
+        if show is None:
+            raise CantRemoveShowException(u'Failed removing show: Show does not exist')
+
+        if not hasattr(show, u'indexerid'):
+            raise CantRemoveShowException(u'Failed removing show: Show does not have an indexer id')
+
         if self._isInQueue(show, (ShowQueueActions.REMOVE,)):
-            raise CantRemoveShowException("This show is already queued to be removed")
+            raise CantRemoveShowException(u'[{!s}]: Show is already queued to be removed'.format(show.indexerid))
 
         # remove other queued actions for this show.
-        for x in self.queue:
-            if x and x != self.currentItem and show.indexerid == x.show.indexerid:
-                self.queue.remove(x)
+        for item in self.queue:
+            if all([item, item.show, item != self.currentItem, show.indexerid == item.show.indexerid]):
+                self.queue.remove(item)
 
-        queueItemObj = QueueItemRemove(show=show, full=full)
-        self.add_item(queueItemObj)
+        queue_item_obj = QueueItemRemove(show=show, full=full)
+        self.add_item(queue_item_obj)
 
-        return queueItemObj
+        return queue_item_obj
 
 
 class ShowQueueActions(object):
@@ -226,7 +237,7 @@ class ShowQueueItem(generic_queue.QueueItem):
 
 class QueueItemAdd(ShowQueueItem):
     def __init__(self, indexer, indexer_id, showDir, default_status, quality, flatten_folders, lang, subtitles, anime,
-                 scene, paused, blacklist, whitelist, default_status_after, stay_ahead):
+                 scene, paused, blacklist, whitelist, default_status_after, stay_ahead, root_dir):
 
         self.indexer = indexer
         self.indexer_id = indexer_id
@@ -243,6 +254,7 @@ class QueueItemAdd(ShowQueueItem):
         self.whitelist = whitelist
         self.default_status_after = default_status_after
         self.stay_ahead = stay_ahead
+        self.root_dir = root_dir
 
         self.show = None
 
@@ -278,7 +290,7 @@ class QueueItemAdd(ShowQueueItem):
 
         ShowQueueItem.run(self)
 
-        logger.log(u"Starting to add show " + self.showDir)
+        logger.log(u"Starting to add show {0}".format("by ShowDir: {0}".format(self.showDir) if self.showDir else "by Indexer Id: {0}".format(self.indexer_id)))
         # make sure the Indexer IDs are valid
         try:
 
@@ -290,7 +302,23 @@ class QueueItemAdd(ShowQueueItem):
 
             t = sickbeard.indexerApi(self.indexer).indexer(**lINDEXER_API_PARMS)
             s = t[self.indexer_id]
-
+            
+            ## Let's try to create the show Dir if it's not provided. This way we force the show dir to build build using the
+            # Indexers provided series name
+            if not self.showDir and self.root_dir:
+                show_name = get_showname_from_indexer(self.indexer, self.indexer_id, self.lang)
+                if show_name:
+                    self.showDir = ek(os.path.join, self.root_dir, sanitize_filename(show_name))
+                    dir_exists = makeDir(self.showDir)
+                    if not dir_exists:
+                        logger.log(u"Unable to create the folder {0}, can't add the show".format(self.showDir))
+                        return
+                
+                    chmodAsParent(self.showDir)
+                else:
+                    logger.log(u"Unable to get a show {0}, can't add the show".format(self.showDir))
+                    return
+                
             # this usually only happens if they have an NFO in their show dir which gave us a Indexer ID that has no proper english version of the show
             if getattr(s, 'seriesname', None) is None:
                 logger.log(u"Show in " + self.showDir + " has no name on " + str(

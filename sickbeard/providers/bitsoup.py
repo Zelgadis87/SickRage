@@ -1,6 +1,7 @@
 # coding=utf-8
 # Author: Idan Gutman
-# URL: http://code.google.com/p/sickbeard/
+#
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -19,16 +20,19 @@
 
 import re
 import traceback
+from requests.utils import dict_from_cookiejar
 
-from sickbeard import logger
-from sickbeard import tvcache
+from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
+
 from sickrage.helper.common import convert_size
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
 class BitSoupProvider(TorrentProvider):  # pylint: disable=too-many-instance-attributes
+
     def __init__(self):
+
         TorrentProvider.__init__(self, "BitSoup")
 
         self.urls = {
@@ -47,7 +51,7 @@ class BitSoupProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
         self.minseed = None
         self.minleech = None
 
-        self.cache = BitSoupCache(self)
+        self.cache = tvcache.TVCache(self)
 
         self.search_params = {
             "c42": 1, "c45": 1, "c49": 1, "c7": 1
@@ -60,6 +64,8 @@ class BitSoupProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
         return True
 
     def login(self):
+        if any(dict_from_cookiejar(self.session.cookies).values()):
+            return True
 
         login_params = {
             'username': self.username,
@@ -135,7 +141,7 @@ class BitSoupProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
 
                             item = title, download_url, size, seeders, leechers
                             if mode != 'RSS':
-                                logger.log(u"Found result: %s " % title, logger.DEBUG)
+                                logger.log(u"Found result: %s with %s seeders and %s leechers" % (title, seeders, leechers), logger.DEBUG)
 
                             items.append(item)
 
@@ -151,19 +157,5 @@ class BitSoupProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
 
     def seed_ratio(self):
         return self.ratio
-
-
-class BitSoupCache(tvcache.TVCache):
-    def __init__(self, provider_obj):
-
-        tvcache.TVCache.__init__(self, provider_obj)
-
-        # only poll TorrentBytes every 20 minutes max
-        self.minTime = 20
-
-    def _getRSSData(self):
-        search_strings = {'RSS': ['']}
-        return {'entries': self.provider.search(search_strings)}
-
 
 provider = BitSoupProvider()

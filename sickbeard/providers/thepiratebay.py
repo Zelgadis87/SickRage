@@ -1,5 +1,6 @@
 # coding=utf-8
 # Author: Dustyn Gibson <miigotu@gmail.com>
+#
 # URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
@@ -17,17 +18,19 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-import re
 import posixpath  # Must use posixpath
+import re
 from urllib import urlencode
-from sickbeard import logger
-from sickbeard import tvcache
+
+from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
-from sickrage.helper.common import try_int, convert_size
+
+from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
 
 class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instance-attributes
+
     def __init__(self):
 
         TorrentProvider.__init__(self, "ThePirateBay")
@@ -39,12 +42,12 @@ class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instanc
         self.minseed = None
         self.minleech = None
 
-        self.cache = ThePirateBayCache(self)
+        self.cache = tvcache.TVCache(self, min_time=30)  # only poll ThePirateBay every 30 minutes max
 
-        self.url = 'https://thepiratebay.ms/'
+        self.url = 'https://thepiratebay.se/'
         self.urls = {
             'search': self.url + 's/',
-            'rss': self.url + 'tv/latest'
+            'rss': self.url + 'browse/200'
         }
 
         self.custom_url = None
@@ -72,7 +75,7 @@ class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instanc
 
                 search_params['q'] = search_string.strip()
 
-                search_url = self.urls[('search', 'rss')[mode == 'RSS']] + '?' + urlencode(search_params)
+                search_url = self.urls['search'] + '?' + urlencode(search_params) if mode != 'RSS' else self.urls['rss']
                 if self.custom_url:
                     search_url = posixpath.join(self.custom_url, search_url.split(self.url)[1].lstrip('/'))  # Must use posixpath
 
@@ -106,7 +109,7 @@ class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instanc
                             cells = result.find_all('td')
 
                             title = result.find(class_='detName').get_text(strip=True)
-                            download_url = result.find(title="Download this torrent using magnet")['href']
+                            download_url = result.find(title="Download this torrent using magnet")['href'] + self._custom_trackers
                             if not all([title, download_url]):
                                 continue
 
@@ -118,7 +121,7 @@ class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instanc
                                 continue
 
                             # Accept Torrent only from Good People for every Episode Search
-                            if self.confirmed and result.find(alt=re.compile(r'(VIP|Trusted|Helper|Moderator)')):
+                            if self.confirmed and not result.find(alt=re.compile(r'VIP|Trusted')):
                                 if mode != 'RSS':
                                     logger.log(u"Found result %s but that doesn't seem like a trusted result so I'm ignoring it" % title, logger.DEBUG)
                                 continue
@@ -130,7 +133,7 @@ class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instanc
 
                             item = title, download_url, size, seeders, leechers
                             if mode != 'RSS':
-                                logger.log(u"Found result: %s " % title, logger.DEBUG)
+                                logger.log(u"Found result: %s with %s seeders and %s leechers" % (title, seeders, leechers), logger.DEBUG)
 
                             items.append(item)
                         except StandardError:
@@ -145,18 +148,5 @@ class ThePirateBayProvider(TorrentProvider):  # pylint: disable=too-many-instanc
 
     def seed_ratio(self):
         return self.ratio
-
-
-class ThePirateBayCache(tvcache.TVCache):
-    def __init__(self, provider_obj):
-
-        tvcache.TVCache.__init__(self, provider_obj)
-
-        # only poll ThePirateBay every 30 minutes max
-        self.minTime = 30
-
-    def _getRSSData(self):
-        search_strings = {'RSS': ['']}
-        return {'entries': self.provider.search(search_strings)}
 
 provider = ThePirateBayProvider()
