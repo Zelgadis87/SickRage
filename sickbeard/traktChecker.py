@@ -723,33 +723,37 @@ class TraktChecker():
                     first = False;
 
             logger.log(message)
-            self._updateNextEpisodeData()
+
+            self._updateAllShowsNextEpisodeData()
 
         except traktException as e:
             logger.log(u"Could not connect to trakt service, cannot synch Watched Data: %s" % ex(e), logger.ERROR)
 
-    def _updateNextEpisodeData(self):
+    def _updateAllShowsNextEpisodeData(self):
 
-        myDB = db.DBConnection()
-        myDB.action("DELETE FROM trakt_data;")
-
-        update_datetime = int(time.time())
         showList = list(sickbeard.showList)
-
         for show in showList:
-            sqlResults = myDB.select("SELECT season, episode FROM v_episodes_to_watch where indexer = ? and indexer_id = ? order by season asc, episode asc limit 1", [show.indexer, show.indexerid]);
-            if len(sqlResults) == 1:
-                nextSeason = sqlResults[0]["season"];
-                nextEpisode = sqlResults[0]["episode"];
-            else:
-                nextSeason = -1;
-                nextEpisode = -1;
-
-            myDB.action("INSERT INTO trakt_data(indexer, indexer_id, next_season, next_episode, last_updated) VALUES(?, ?, ?, ?, ?)", [show.indexer, show.indexerid, nextSeason, nextEpisode, update_datetime]);
-
-            if show.stay_ahead > 0:
-                sqlResults = myDB.select("SELECT season, episode FROM tv_episodes WHERE status = ? and episode_id IN (select ep.episode_id from tv_episodes ep left join trakt_data trakt on (trakt.indexer = ep.indexer and trakt.indexer_id = ep.showid) where ep.indexer = ? and ep.showid = ? AND ep.season > 0 AND ((trakt.next_season IS NULL) OR (trakt.next_season > -1 AND ((ep.season > trakt.next_season) OR (ep.season = trakt.next_season AND ep.episode >= trakt.next_episode)))) order by ep.season ASC, ep.episode ASC limit ?)", [SKIPPED, show.indexer, show.indexerid, show.stay_ahead]);
-                for row in sqlResults:
-                    setEpisodeToWanted(show, row["season"], row["episode"])
+            self._updateShowNextEpisodeData(show)
 
         logger.log("Next episodes synchronization complete.")
+
+    def _updateShowNextEpisodeData(self, show):
+
+        logger.log(u"Updating show next episode data: {show}".format(show=show.name))
+
+        myDB = db.DBConnection()
+        sqlResults = myDB.select("SELECT season, episode FROM v_episodes_to_watch where indexer = ? and indexer_id = ? order by season asc, episode asc limit 1", [show.indexer, show.indexerid]);
+        if len(sqlResults) == 1:
+            nextSeason = sqlResults[0]["season"];
+            nextEpisode = sqlResults[0]["episode"];
+        else:
+            nextSeason = -1;
+            nextEpisode = -1;
+
+        myDB.action("DELETE FROM trakt_data WHERE indexer=? AND indexer_id=?", [show.indexer, show.indexerid])
+        myDB.action("INSERT INTO trakt_data(indexer, indexer_id, next_season, next_episode, last_updated) VALUES(?, ?, ?, ?, ?)", [show.indexer, show.indexerid, nextSeason, nextEpisode, update_datetime]);
+
+        if show.stay_ahead > 0:
+            sqlResults = myDB.select("SELECT season, episode FROM tv_episodes WHERE status = ? and episode_id IN (select ep.episode_id from tv_episodes ep left join trakt_data trakt on (trakt.indexer = ep.indexer and trakt.indexer_id = ep.showid) where ep.indexer = ? and ep.showid = ? AND ep.season > 0 AND ((trakt.next_season IS NULL) OR (trakt.next_season > -1 AND ((ep.season > trakt.next_season) OR (ep.season = trakt.next_season AND ep.episode >= trakt.next_episode)))) order by ep.season ASC, ep.episode ASC limit ?)", [SKIPPED, show.indexer, show.indexerid, show.stay_ahead]);
+            for row in sqlResults:
+                setEpisodeToWanted(show, row["season"], row["episode"])
