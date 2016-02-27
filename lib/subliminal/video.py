@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import hashlib
 import logging
 import os
+import re
 import struct
 
 from babelfish import Error as BabelfishError, Language
@@ -28,8 +29,7 @@ SUBTITLE_EXTENSIONS = ('.srt', '.sub', '.smi', '.txt', '.ssa', '.ass', '.mpl')
 class Video(object):
     """Base class for videos.
 
-    Represent a video, existing or not. Attributes have an associated score based on equations defined in
-    :mod:`~subliminal.score`.
+    Represent a video, existing or not.
 
     :param str name: name or path of the video.
     :param str format: format of the video (HDTV, WEB-DL, BluRay, ...).
@@ -37,15 +37,12 @@ class Video(object):
     :param str resolution: resolution of the video stream (480p, 720p, 1080p or 1080i).
     :param str video_codec: codec of the video stream.
     :param str audio_codec: codec of the main audio stream.
-    :param int imdb_id: IMDb id of the video.
+    :param str imdb_id: IMDb id of the video.
     :param dict hashes: hashes of the video file by provider names.
     :param int size: size of the video file in bytes.
-    :param set subtitle_languages: existing subtitle languages
+    :param set subtitle_languages: existing subtitle languages.
 
     """
-    #: Score by match property
-    scores = {}
-
     def __init__(self, name, format=None, release_group=None, resolution=None, video_codec=None, audio_codec=None,
                  imdb_id=None, hashes=None, size=None, subtitle_languages=None):
         #: Name or path of the video
@@ -127,26 +124,20 @@ class Video(object):
 class Episode(Video):
     """Episode :class:`Video`.
 
-    Scores are defined by a set of equations, see :func:`~subliminal.score.solve_episode_equations`
-
     :param str series: series of the episode.
     :param int season: season number of the episode.
     :param int episode: episode number of the episode.
     :param str title: title of the episode.
-    :param int year: year of series.
-    :param int tvdb_id: TVDB id of the episode
+    :param int year: year of the series.
+    :param bool original_series: whether the series is the first with this name.
+    :param int tvdb_id: TVDB id of the episode.
+    :param \*\*kwargs: additional parameters for the :class:`Video` constructor.
 
     """
-    #: Score by match property
-    scores = {'hash': 137, 'imdb_id': 110, 'tvdb_id': 88, 'series': 44, 'year': 44, 'title': 22, 'season': 11,
-              'episode': 11, 'release_group': 11, 'format': 6, 'video_codec': 4, 'resolution': 4, 'audio_codec': 2,
-              'hearing_impaired': 1}
+    def __init__(self, name, series, season, episode, title=None, year=None, original_series=True, tvdb_id=None,
+                 series_tvdb_id=None, series_imdb_id=None, **kwargs):
+        super(Episode, self).__init__(name, **kwargs)
 
-    def __init__(self, name, series, season, episode, format=None, release_group=None, resolution=None,
-                 video_codec=None, audio_codec=None, imdb_id=None, hashes=None, size=None, subtitle_languages=None,
-                 title=None, year=None, tvdb_id=None):
-        super(Episode, self).__init__(name, format, release_group, resolution, video_codec, audio_codec, imdb_id,
-                                      hashes, size, subtitle_languages)
         #: Series of the episode
         self.series = series
 
@@ -162,8 +153,17 @@ class Episode(Video):
         #: Year of series
         self.year = year
 
+        #: The series is the first with this name
+        self.original_series = original_series
+
         #: TVDB id of the episode
         self.tvdb_id = tvdb_id
+
+        #: TVDB id of the series
+        self.series_tvdb_id = series_tvdb_id
+
+        #: IMDb id of the series
+        self.series_imdb_id = series_imdb_id
 
     @classmethod
     def fromguess(cls, name, guess):
@@ -173,10 +173,10 @@ class Episode(Video):
         if 'title' not in guess or 'season' not in guess or 'episode' not in guess:
             raise ValueError('Insufficient data to process the guess')
 
-        return cls(name, guess['title'], guess['season'], guess['episode'], format=guess.get('format'),
+        return cls(name, guess['title'], guess['season'], guess['episode'], title=guess.get('episode_title'),
+                   year=guess.get('year'), format=guess.get('format'), original_series='year' not in guess,
                    release_group=guess.get('release_group'), resolution=guess.get('screen_size'),
-                   video_codec=guess.get('video_codec'), audio_codec=guess.get('audio_codec'),
-                   title=guess.get('episode_title'), year=guess.get('year'))
+                   video_codec=guess.get('video_codec'), audio_codec=guess.get('audio_codec'))
 
     @classmethod
     def fromname(cls, name):
@@ -192,20 +192,14 @@ class Episode(Video):
 class Movie(Video):
     """Movie :class:`Video`.
 
-    Scores are defined by a set of equations, see :func:`~subliminal.score.solve_movie_equations`
-
     :param str title: title of the movie.
-    :param int year: year of the movie
+    :param int year: year of the movie.
+    :param \*\*kwargs: additional parameters for the :class:`Video` constructor.
 
     """
-    #: Score by match property
-    scores = {'hash': 62, 'imdb_id': 62, 'title': 23, 'year': 12, 'release_group': 11, 'format': 6, 'video_codec': 4,
-              'resolution': 4, 'audio_codec': 2, 'hearing_impaired': 1}
+    def __init__(self, name, title, year=None, **kwargs):
+        super(Movie, self).__init__(name, **kwargs)
 
-    def __init__(self, name, title, format=None, release_group=None, resolution=None, video_codec=None,
-                 audio_codec=None, imdb_id=None, hashes=None, size=None, subtitle_languages=None, year=None):
-        super(Movie, self).__init__(name, format, release_group, resolution, video_codec, audio_codec, imdb_id, hashes,
-                                    size, subtitle_languages)
         #: Title of the movie
         self.title = title
 
@@ -392,14 +386,12 @@ def scan_video(path, subtitles=True, embedded_subtitles=True, subtitles_dir=None
     return video
 
 
-def scan_videos(path, subtitles=True, embedded_subtitles=True, subtitles_dir=None, age=None):
+def scan_videos(path, age=None, **kwargs):
     """Scan `path` for videos and their subtitles.
 
     :param str path: existing directory path to scan.
-    :param bool subtitles: scan for subtitles with the same name.
-    :param bool embedded_subtitles: scan for embedded subtitles.
-    :param str subtitles_dir: directory to search for subtitles.
     :param datetime.timedelta age: maximum age of the video.
+    :param \*\*kwargs: parameters for the :func:`scan_video` function.
     :return: the scanned videos.
     :rtype: list of :class:`Video`
 
@@ -443,14 +435,13 @@ def scan_videos(path, subtitles=True, embedded_subtitles=True, subtitles_dir=Non
                 continue
 
             # skip old files
-            if datetime.utcnow() - datetime.utcfromtimestamp(os.path.getmtime(filepath)) > age:
+            if age and datetime.utcnow() - datetime.utcfromtimestamp(os.path.getmtime(filepath)) > age:
                 logger.debug('Skipping old file %r in %r', filename, dirpath)
                 continue
 
             # scan video
             try:
-                video = scan_video(filepath, subtitles=subtitles, embedded_subtitles=embedded_subtitles,
-                                   subtitles_dir=subtitles_dir)
+                video = scan_video(filepath, **kwargs)
             except ValueError:  # pragma: no cover
                 logger.exception('Error scanning video')
                 continue
@@ -521,3 +512,46 @@ def hash_napiprojekt(video_path):
     with open(video_path, 'rb') as f:
         data = f.read(readsize)
     return hashlib.md5(data).hexdigest()
+
+
+def sanitize_release_group(string):
+    """Sanitize a string that represents a `release_group` by stripping the square brackets information.
+
+    :param str string: the release group to sanitize.
+    :return: the sanitized release group.
+    :rtype: str
+    """
+    # only deal with strings
+    if string is None:
+        return
+
+    # strip square brackets information
+    string = re.sub('\s*\[\w+\]', '', string)
+
+    # strip and lower case
+    return string.strip().lower()
+
+
+def sanitize(string):
+    """Sanitize a string to strip special characters.
+
+    :param str string: the string to sanitize.
+    :return: the sanitized string.
+    :rtype: str
+
+    """
+    # only deal with strings
+    if string is None:
+        return
+
+    # replace some characters with one space
+    string = re.sub('[-:\(\)]', ' ', string)
+
+    # remove some characters
+    string = re.sub('[\'\.]', '', string)
+
+    # replace multiple spaces with one
+    string = re.sub('\s+', ' ', string)
+
+    # strip and lower case
+    return string.strip().lower()

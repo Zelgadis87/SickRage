@@ -83,7 +83,7 @@ if os.path.isdir(OLD_TORNADO):
     shutil.rmtree(OLD_TORNADO + '_kill')
 
 import sickbeard
-from sickbeard import db, logger, network_timezones, failed_history  # , name_cache
+from sickbeard import db, logger, network_timezones, failed_history, name_cache
 from sickbeard.tv import TVShow
 from sickbeard.webserveInit import SRWebServer
 from sickbeard.event_queue import Events
@@ -362,7 +362,7 @@ class SickRage(object):
         sickbeard.start()
 
         # Build internal name cache
-        # name_cache.buildNameCache()
+        name_cache.buildNameCache()
 
         # Pre-populate network timezones, it isn't thread safe
         network_timezones.update_network_dict()
@@ -371,7 +371,7 @@ class SickRage(object):
         if sickbeard.USE_FAILED_DOWNLOADS:
             failed_history.trimHistory()
 
-        # # Check for metadata indexer updates for shows (Disabled until we use api)
+        # Check for metadata indexer updates for shows (sets the next aired ep!)
         # sickbeard.showUpdateScheduler.forceRun()
 
         # Launch browser

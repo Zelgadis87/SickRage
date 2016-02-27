@@ -17,7 +17,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
+# pylint:disable=too-many-lines
 
+import warnings
 import os
 import io
 import ctypes
@@ -51,11 +53,11 @@ from socket import timeout as SocketTimeout
 from sickbeard import logger, classes
 from sickbeard.common import USER_AGENT
 from sickbeard import db
-from sickbeard.notifiers import synoindex_notifier
 from sickrage.helper.common import http_code_description, media_extensions, pretty_file_size, subtitle_extensions, episode_num
 from sickrage.helper.encoding import ek
 from sickrage.helper.exceptions import ex
 from sickrage.show.Show import Show
+from cachecontrol import CacheControl
 from itertools import izip, cycle
 
 import shutil
@@ -119,6 +121,7 @@ def remove_non_release_groups(name):
         r'\[PublicHD\]$': 'searchre',
         r'\[AndroidTwoU\]$': 'searchre',
         r'\[brassetv]\]$': 'searchre',
+        r'\(musicbolt\.com\)$': 'searchre',
         r'\.\[BT\]$': 'searchre',
         r' \[1044\]$': 'searchre',
         r'\.RiPSaLoT$': 'searchre',
@@ -185,10 +188,7 @@ def isMediaFile(filename):
         if re.search('extras?$', sepFile[0], re.I):
             return False
 
-        if sepFile[2].lower() in media_extensions:
-            return True
-        else:
-            return False
+        return sepFile[2].lower() in media_extensions
     except TypeError as error:  # Not a string
         logger.log('Invalid filename. Filename must be a string. %s' % error, logger.DEBUG)  # pylint: disable=no-member
         return False
@@ -251,7 +251,7 @@ def makeDir(path):
         try:
             ek(os.makedirs, path)
             # do the library update for synoindex
-            synoindex_notifier.addFolder(path)
+            sickbeard.notifiers.synoindex_notifier.addFolder(path)
         except OSError:
             return False
     return True
@@ -344,11 +344,23 @@ def copyFile(srcFile, destFile):
     :param destFile: Path of destination file
     """
 
-    ek(shutil.copyfile, srcFile, destFile)
     try:
-        ek(shutil.copymode, srcFile, destFile)
-    except OSError:
-        pass
+        from shutil import SpecialFileError, Error
+    except ImportError:
+        from shutil import Error
+        SpecialFileError = Error
+
+    try:
+        ek(shutil.copyfile, srcFile, destFile)
+    except (SpecialFileError, Error) as error:
+        logger.log(u'{}'.format(error), logger.WARNING)
+    except Exception as error:
+        logger.log(u'{}'.format(error), logger.ERROR)
+    else:
+        try:
+            ek(shutil.copymode, srcFile, destFile)
+        except OSError:
+            pass
 
 
 def moveFile(srcFile, destFile):
@@ -471,7 +483,7 @@ def make_dirs(path):
                     # use normpath to remove end separator, otherwise checks permissions against itself
                     chmodAsParent(ek(os.path.normpath, sofar))
                     # do the library update for synoindex
-                    synoindex_notifier.addFolder(sofar)
+                    sickbeard.notifiers.synoindex_notifier.addFolder(sofar)
                 except (OSError, IOError) as e:
                     logger.log(u"Failed creating %s : %r" % (sofar, ex(e)), logger.ERROR)
                     return False
@@ -551,7 +563,7 @@ def delete_empty_folders(check_empty_dir, keep_dir=None):
                 # need shutil.rmtree when ignore_items is really implemented
                 ek(os.rmdir, check_empty_dir)
                 # do the library update for synoindex
-                synoindex_notifier.deleteFolder(check_empty_dir)
+                sickbeard.notifiers.synoindex_notifier.deleteFolder(check_empty_dir)
             except OSError as e:
                 logger.log(u"Unable to delete %s. Error: %r" % (check_empty_dir, repr(e)), logger.WARNING)
                 break
@@ -608,7 +620,7 @@ def chmodAsParent(childPath):
     if childPath_mode == childMode:
         return
 
-    childPath_owner = childPathStat.st_uid
+    childPath_owner = childPathStat.st_uid  # pylint: disable=no-member
     user_id = os.geteuid()  # @UndefinedVariable - only available on UNIX
 
     if user_id != 0 and user_id != childPath_owner:
@@ -648,7 +660,7 @@ def fixSetGroupID(childPath):
         if childGID == parentGID:
             return
 
-        childPath_owner = childStat.st_uid
+        childPath_owner = childStat.st_uid  # pylint: disable=no-member
         user_id = os.geteuid()  # @UndefinedVariable - only available on UNIX
 
         if user_id != 0 and user_id != childPath_owner:
@@ -1335,18 +1347,9 @@ def touchFile(fname, atime=None):
     :return: True on success, False on failure
     """
 
-    if atime is not None:
-        try:
-            with file(fname, 'a'):
-                os.utime(fname, (atime, atime))
-                return True
-        except Exception as e:
-            if e.errno == errno.ENOSYS:
-                logger.log(u"File air date stamping not available on your OS. Please disable setting", logger.DEBUG)
-            elif e.errno == errno.EACCES:
-                logger.log(u"File air date stamping failed(Permission denied). Check permissions for file: %s" % fname, logger.ERROR)
-            else:
-                logger.log(u"File air date stamping failed. The error is: %r" % ex(e), logger.ERROR)
+    if atime and fname and ek(os.path.isfile, fname):
+        ek(os.utime, fname, (atime, atime))
+        return True
 
     return False
 
@@ -1381,9 +1384,7 @@ def _setUpSession(session, headers):
     """
 
     # request session
-    # Lets try without caching sessions to disk for awhile
-    # cache_dir = sickbeard.CACHE_DIR or _getTempDir()
-    # session = CacheControl(sess=session, cache=caches.FileCache(ek(os.path.join, cache_dir, 'sessions'), use_dir_lock=True), cache_etags=False)
+    session = CacheControl(sess=session, cache_etags=True)
 
     # request session clear residual referer
     # pylint: disable=superfluous-parens
@@ -1416,11 +1417,28 @@ def _setUpSession(session, headers):
     return session
 
 
-def getURL(url, post_data=None, params=None, headers=None, timeout=30, session=None, json=False, need_bytes=False):
+def getURL(url, post_data=None, params=None, headers=None,  # pylint:disable=too-many-arguments, too-many-return-statements, too-many-branches
+           timeout=30, session=None, json=False, need_bytes=False, **kwargs):
     """
     Returns a byte-string retrieved from the url provider.
     """
 
+    # TODO: make raw response the default once the the current args are fully deprecated
+    default = None
+    if json:
+        message = u'getURL argument json will be deprecated in the near future use returns=\'json\' instead.'
+        default = u'json'
+    elif need_bytes:
+        message = u'getURL argument need_bytes will be deprecated in the near future use returns=\'content\' instead.'
+        default = u'content'
+    elif u'returns' not in kwargs:
+        default = u'text'
+        message = u'getURL default return type may change in the near future use returns=\'text\' instead.'
+    if default is not None:
+        warnings.warn(message, PendingDeprecationWarning, stacklevel=2)
+
+    response_type = kwargs.pop(u'returns', default)
+    hooks = kwargs.pop(u'hooks', None)
     session = _setUpSession(session, headers)
 
     if params and isinstance(params, (list, dict)):
@@ -1439,9 +1457,9 @@ def getURL(url, post_data=None, params=None, headers=None, timeout=30, session=N
                         post_data[param] = post_data[param].encode('utf-8')
 
             session.headers.update({'Content-Type': 'application/x-www-form-urlencoded'})
-            resp = session.post(url, data=post_data, timeout=timeout, allow_redirects=True, verify=session.verify)
+            resp = session.post(url, data=post_data, timeout=timeout, allow_redirects=True, verify=session.verify, hooks=hooks)
         else:
-            resp = session.get(url, timeout=timeout, allow_redirects=True, verify=session.verify)
+            resp = session.get(url, timeout=timeout, allow_redirects=True, verify=session.verify, hooks=hooks)
 
         if not resp.ok:
             logger.log(u"Requested getURL %s returned status code is %s: %s"
@@ -1465,17 +1483,17 @@ def getURL(url, post_data=None, params=None, headers=None, timeout=30, session=N
         logger.log(traceback.format_exc(), logger.DEBUG)
         return None
     except Exception as e:
-        if e.errno != errno.ECONNRESET:
+        if hasattr(e, 'errno') and e.errno == errno.ECONNRESET:
+            logger.log(u"Connection reseted by peer accessing getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
+        else:
             logger.log(u"Unknown exception in getURL %s Error: %r" % (url, ex(e)), logger.ERROR)
             logger.log(traceback.format_exc(), logger.DEBUG)
-        else:
-            logger.log(u"Connection reseted by peer accessing getURL %s Error: %r" % (url, ex(e)), logger.DEBUG)
         return None
 
-    return (resp.text, resp.content)[need_bytes] if not json else resp.json()
+    return resp if response_type == u'response' or response_type is None else resp.json() if response_type == u'json' else getattr(resp, response_type, resp)
 
 
-def download_file(url, filename, session=None, headers=None):
+def download_file(url, filename, session=None, headers=None):  # pylint:disable=too-many-return-statements
     """
     Downloads a file specified
 
@@ -1612,7 +1630,7 @@ def verify_freespace(src, dest, oldfile=None):
     if hasattr(os, 'statvfs'):  # POSIX
         def disk_usage(path):
             st = ek(os.statvfs, path)
-            free = st.f_bavail * st.f_frsize
+            free = st.f_bavail * st.f_frsize  # pylint: disable=no-member
             return free
 
     elif os.name == 'nt':       # Windows
@@ -1697,8 +1715,8 @@ def isFileLocked(checkfile, writeLockCheck=False):
     if not ek(os.path.exists, checkfile):
         return True
     try:
-        f = io.open(checkfile, 'rb')
-        f.close()
+        f = ek(io.open, checkfile, 'rb')
+        f.close()  # pylint: disable=no-member
     except IOError:
         return True
 
@@ -1728,18 +1746,18 @@ def getDiskSpaceUsage(diskPath=None):
             return pretty_file_size(free_bytes.value)
         else:
             st = ek(os.statvfs, diskPath)
-            return pretty_file_size(st.f_bavail * st.f_frsize)
+            return pretty_file_size(st.f_bavail * st.f_frsize)  # pylint: disable=no-member
     else:
         return False
 
 
-def getTVDBFromID(indexer_id, indexer):
+def getTVDBFromID(indexer_id, indexer):  # pylint:disable=too-many-return-statements
 
     session = requests.Session()
     tvdb_id = ''
     if indexer == 'IMDB':
         url = "http://www.thetvdb.com/api/GetSeriesByRemoteID.php?imdbid=%s" % indexer_id
-        data = getURL(url, session=session, need_bytes=True)
+        data = getURL(url, session=session, returns='content')
         if data is None:
             return tvdb_id
         try:
@@ -1753,7 +1771,7 @@ def getTVDBFromID(indexer_id, indexer):
         return tvdb_id
     elif indexer == 'ZAP2IT':
         url = "http://www.thetvdb.com/api/GetSeriesByRemoteID.php?zap2it=%s" % indexer_id
-        data = getURL(url, session=session, need_bytes=True)
+        data = getURL(url, session=session, returns='content')
         if data is None:
             return tvdb_id
         try:
@@ -1767,7 +1785,7 @@ def getTVDBFromID(indexer_id, indexer):
         return tvdb_id
     elif indexer == 'TVMAZE':
         url = "http://api.tvmaze.com/shows/%s" % indexer_id
-        data = getURL(url, session=session, json=True)
+        data = getURL(url, session=session, returns='json')
         if data is None:
             return tvdb_id
         tvdb_id = data['externals']['thetvdb']
@@ -1786,10 +1804,11 @@ def get_showname_from_indexer(indexer, indexer_id, lang='en'):
     t = sickbeard.indexerApi(indexer).indexer(**lINDEXER_API_PARMS)
     s = t[int(indexer_id)]
 
-    if hasattr(s,'data'):
+    if hasattr(s, 'data'):
         return s.data.get('seriesname')
 
     return None
+
 
 def is_ip_private(ip):
     priv_lo = re.compile(r"^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$")

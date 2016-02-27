@@ -214,7 +214,7 @@ class CheckVersion(object):
             assert len(cur_hash) == 40, "Commit hash wrong length: %s hash: %s" % (len(cur_hash), cur_hash)
 
             check_url = "http://cdn.rawgit.com/%s/%s/%s/sickbeard/databases/mainDB.py" % (sickbeard.GIT_ORG, sickbeard.GIT_REPO, cur_hash)
-            response = helpers.getURL(check_url, session=self.session)
+            response = helpers.getURL(check_url, session=self.session, returns='text')
             assert response, "Empty response from %s" % check_url
 
             match = re.search(r"MAX_DB_VERSION\s=\s(?P<version>\d{2,3})", response)
@@ -294,7 +294,7 @@ class CheckVersion(object):
         # Grab a copy of the news
         logger.log(u'check_for_new_news: Checking GitHub for latest news.', logger.DEBUG)
         try:
-            news = helpers.getURL(sickbeard.NEWS_URL, session=self.session)
+            news = helpers.getURL(sickbeard.NEWS_URL, session=self.session, returns='text')
         except Exception:
             logger.log(u'check_for_new_news: Could not load news from repo.', logger.WARNING)
             news = ''
@@ -529,7 +529,7 @@ class GitUpdateManager(UpdateManager):
         self.update_remote_origin()
 
         # get all new info from github
-        output, _, exit_status = self._run_git(self._git_path, 'fetch %s %s' % (sickbeard.GIT_REMOTE, self.branch))
+        output, _, exit_status = self._run_git(self._git_path, 'fetch %s' % sickbeard.GIT_REMOTE)
         if not exit_status == 0:
             logger.log(u"Unable to contact github, can't check for update", logger.WARNING)
             return

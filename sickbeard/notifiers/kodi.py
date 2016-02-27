@@ -42,7 +42,7 @@ except ImportError:
     import simplejson as json
 
 
-class KODINotifier(object):
+class Notifier(object):
     sr_logo_url = 'https://raw.githubusercontent.com/SickRage/SickRage/master/gui/slick/images/sickrage-shark-mascot.png'
 
     def _get_kodi_version(self, host, username, password, dest_app="KODI"):
@@ -475,7 +475,7 @@ class KODINotifier(object):
                 return False
 
             # lookup tv-show path if we don't already know it
-            if not len(path):
+            if not path:
                 pathCommand = '{"jsonrpc":"2.0","method":"VideoLibrary.GetTVShowDetails","params":{"tvshowid":%d, "properties": ["file"]},"id":1}' % tvshowid
                 pathResponse = self._send_to_kodi_json(pathCommand, host)
 
@@ -483,7 +483,7 @@ class KODINotifier(object):
 
             logger.log(u"Received Show: " + showName + " with ID: " + str(tvshowid) + " Path: " + path, logger.DEBUG)
 
-            if not len(path):
+            if not path:
                 logger.log(u"No valid path found for " + showName + " with ID: " + str(tvshowid) + " on " + host, logger.WARNING)
                 return False
 
@@ -582,6 +582,3 @@ class KODINotifier(object):
                 return True
             else:
                 return False
-
-
-notifier = KODINotifier

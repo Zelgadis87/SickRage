@@ -49,8 +49,6 @@ from sickbeard.webapi import function_mapper
 
 from sickbeard.imdbPopular import imdb_popular
 from sickbeard.helpers import get_showname_from_indexer
-from anidbhttp import anidbquery
-from anidbhttp.query import QUERY_HOT
 
 from dateutil import tz
 from unrar2 import RarFile
@@ -90,8 +88,12 @@ from tornado.routes import route
 from tornado.web import RequestHandler, HTTPError, authenticated
 from tornado.gen import coroutine
 from tornado.ioloop import IOLoop
-from tornado.concurrent import run_on_executor
+
 from concurrent.futures import ThreadPoolExecutor
+from tornado.process import cpu_count
+
+from tornado.concurrent import run_on_executor
+
 from mako.runtime import UNDEFINED
 
 mako_lookup = None
@@ -257,7 +259,7 @@ class WebHandler(BaseHandler):
         super(WebHandler, self).__init__(*args, **kwargs)
         self.io_loop = IOLoop.current()
 
-    executor = ThreadPoolExecutor(50)
+    executor = ThreadPoolExecutor(cpu_count())
 
     @authenticated
     @coroutine
@@ -532,7 +534,7 @@ class WebRoot(WebHandler):
 
 
 class CalendarHandler(BaseHandler):
-    def get(self, *args, **kwargs):
+    def get(self):
         if sickbeard.CALENDAR_UNPROTECTED:
             self.write(self.calendar())
         else:
@@ -559,9 +561,12 @@ class CalendarHandler(BaseHandler):
         ical += 'X-WR-CALDESC:SickRage\r\n'
         ical += 'PRODID://Sick-Beard Upcoming Episodes//\r\n'
 
+        future_weeks = try_int(self.get_argument('future', 52), 52)
+        past_weeks = try_int(self.get_argument('past', 52), 52)
+
         # Limit dates
-        past_date = (datetime.date.today() + datetime.timedelta(weeks=-52)).toordinal()
-        future_date = (datetime.date.today() + datetime.timedelta(weeks=52)).toordinal()
+        past_date = (datetime.date.today() + datetime.timedelta(weeks=-past_weeks)).toordinal()
+        future_date = (datetime.date.today() + datetime.timedelta(weeks=future_weeks)).toordinal()
 
         # Get all the shows that are not paused and are currently on air (from kjoconnor Fork)
         main_db_con = db.DBConnection()
@@ -786,7 +791,7 @@ class Home(WebRoot):
 
         host = config.clean_url(host)
 
-        connection, accesMsg = sab.getSabAccesMethod(host, username, password, apikey)
+        connection, accesMsg = sab.getSabAccesMethod(host)
         if connection:
             authed, authMsg = sab.testAuthentication(host, username, password, apikey)  # @UnusedVariable
             if authed:
@@ -1284,13 +1289,13 @@ class Home(WebRoot):
                 submenu.append({'title': 'Remove', 'path': 'home/deleteShow?show=%d' % showObj.indexerid, 'class': 'removeshow', 'confirm': True, 'icon': 'ui-icon ui-icon-trash'})
                 submenu.append({'title': 'Re-scan files', 'path': 'home/refreshShow?show=%d' % showObj.indexerid, 'icon': 'ui-icon ui-icon-refresh'})
                 submenu.append({'title': 'Force Full Update', 'path': 'home/updateShow?show=%d&amp;force=1' % showObj.indexerid, 'icon': 'ui-icon ui-icon-transfer-e-w'})
-                submenu.append({'title': 'Update show in KODI', 'path': 'home/updateKODI?show=%d' % showObj.indexerid, 'requires': self.haveKODI(), 'icon': 'submenu-icon-kodi'})
-                submenu.append({'title': 'Update show in Emby', 'path': 'home/updateEMBY?show=%d' % showObj.indexerid, 'requires': self.haveEMBY(), 'icon': 'ui-icon ui-icon-refresh'})
+                submenu.append({'title': 'Update show in KODI', 'path': 'home/updateKODI?show=%d' % showObj.indexerid, 'requires': self.haveKODI(), 'icon': 'menu-icon-kodi'})
+                submenu.append({'title': 'Update show in Emby', 'path': 'home/updateEMBY?show=%d' % showObj.indexerid, 'requires': self.haveEMBY(), 'icon': 'menu-icon-emby'})
                 submenu.append({'title': 'Preview Rename', 'path': 'home/testRename?show=%d' % showObj.indexerid, 'icon': 'ui-icon ui-icon-tag'})
 
                 if sickbeard.USE_SUBTITLES and not sickbeard.showQueueScheduler.action.isBeingSubtitled(
                         showObj) and showObj.subtitles:
-                    submenu.append({'title': 'Download Subtitles', 'path': 'home/subtitleShow?show=%d' % showObj.indexerid, 'icon': 'ui-icon ui-icon-comment'})
+                    submenu.append({'title': 'Download Subtitles', 'path': 'home/subtitleShow?show=%d' % showObj.indexerid, 'icon': 'menu-icon-backlog'})
 
         epCounts = {
             Overview.SKIPPED: 0,
@@ -2236,7 +2241,7 @@ class HomeChangeLog(Home):
 
     def index(self):
         try:
-            changes = helpers.getURL('http://sickrage.github.io/sickrage-news/CHANGES.md', session=requests.Session())
+            changes = helpers.getURL('http://sickrage.github.io/sickrage-news/CHANGES.md', session=requests.Session(), returns='text')
         except Exception:
             logger.log(u'Could not load changes from repo, giving a link!', logger.DEBUG)
             changes = 'Could not load changes from the repo. [Click here for CHANGES.md](http://sickrage.github.io/sickrage-news/CHANGES.md)'
@@ -2626,25 +2631,6 @@ class HomeAddShows(Home):
                         popular_shows=popular_shows, imdb_exception=e,
                         topmenu="home",
                         controller="addShows", action="popularShows")
-
-    def anidbPopular(self):
-        """
-        Fetches data from IMDB to show a list of popular shows.
-        """
-        t = PageTemplate(rh=self, filename="addShows_anidbPopular.mako")
-        e = None
-
-        try:
-            all_anime = anidbquery.query(QUERY_HOT)
-            mapped_anime = [anime for anime in all_anime if anime.tvdbid]
-        except Exception as e:
-            # print traceback.fox1rmat_exc()
-            mapped_anime = None
-
-        return t.render(title="Anidb Popular Anime", header="Anidb Popular Anime",
-                        anime=mapped_anime, imdb_exception=e, whitelist=[],
-                        blacklist=[], groups=[], topmenu="home", enable_anime_options=True,
-                        controller="addShows", action="addFromList")
 
     def addShowToBlacklist(self, indexer_id):
         # URL parameters
@@ -3749,7 +3735,7 @@ class History(WebRoot):
         t = PageTemplate(rh=self, filename="history.mako")
         submenu = [
             {'title': 'Clear History', 'path': 'history/clearHistory', 'icon': 'ui-icon ui-icon-trash', 'class': 'clearhistory', 'confirm': True},
-            {'title': 'Trim History', 'path': 'history/trimHistory', 'icon': 'ui-icon ui-icon-trash', 'class': 'trimhistory', 'confirm': True},
+            {'title': 'Trim History', 'path': 'history/trimHistory', 'icon': 'menu-icon-cut', 'class': 'trimhistory', 'confirm': True},
         ]
 
         return t.render(historyResults=data, compactResults=compact, limit=limit,
@@ -3779,14 +3765,14 @@ class Config(WebRoot):
     @staticmethod
     def ConfigMenu():
         menu = [
-            {'title': 'General', 'path': 'config/general/', 'icon': 'ui-icon ui-icon-gear'},
-            {'title': 'Backup/Restore', 'path': 'config/backuprestore/', 'icon': 'ui-icon ui-icon-gear'},
-            {'title': 'Search Settings', 'path': 'config/search/', 'icon': 'ui-icon ui-icon-search'},
-            {'title': 'Search Providers', 'path': 'config/providers/', 'icon': 'ui-icon ui-icon-search'},
-            {'title': 'Subtitles Settings', 'path': 'config/subtitles/', 'icon': 'ui-icon ui-icon-comment'},
-            {'title': 'Post Processing', 'path': 'config/postProcessing/', 'icon': 'ui-icon ui-icon-folder-open'},
-            {'title': 'Notifications', 'path': 'config/notifications/', 'icon': 'ui-icon ui-icon-note'},
-            {'title': 'Anime', 'path': 'config/anime/', 'icon': 'submenu-icon-anime'},
+            {'title': 'General', 'path': 'config/general/', 'icon': 'menu-icon-config'},
+            {'title': 'Backup/Restore', 'path': 'config/backuprestore/', 'icon': 'menu-icon-backup'},
+            {'title': 'Search Settings', 'path': 'config/search/', 'icon': 'menu-icon-manage-searches'},
+            {'title': 'Search Providers', 'path': 'config/providers/', 'icon': 'menu-icon-provider'},
+            {'title': 'Subtitles Settings', 'path': 'config/subtitles/', 'icon': 'menu-icon-backlog'},
+            {'title': 'Post Processing', 'path': 'config/postProcessing/', 'icon': 'menu-icon-postprocess'},
+            {'title': 'Notifications', 'path': 'config/notifications/', 'icon': 'menu-icon-notification'},
+            {'title': 'Anime', 'path': 'config/anime/', 'icon': 'menu-icon-anime'},
         ]
 
         return menu
@@ -3907,7 +3893,7 @@ class ConfigGeneral(Config):
         sickbeard.NOTIFY_ON_UPDATE = config.checkbox_to_value(notify_on_update)
         # sickbeard.LOG_DIR is set in config.change_LOG_DIR()
         sickbeard.LOG_NR = log_nr
-        sickbeard.LOG_SIZE = log_size
+        sickbeard.LOG_SIZE = float(log_size)
 
         sickbeard.TRASH_REMOVE_SHOW = config.checkbox_to_value(trash_remove_show)
         sickbeard.TRASH_ROTATE_LOGS = config.checkbox_to_value(trash_rotate_logs)
@@ -4229,6 +4215,8 @@ class ConfigPostProcessing(Config):
         # If 'postpone if no subs' is enabled, we must have SRT in allowed extensions list
         if sickbeard.POSTPONE_IF_NO_SUBS:
             allowed_extensions += ',srt'
+            # Auto PP must be disabled because FINDSUBTITLE thread that calls manual PP (like nzbtomedia)
+            sickbeard.PROCESS_AUTOMATICALLY = 0
         sickbeard.ALLOWED_EXTENSIONS = ','.join({x.strip() for x in allowed_extensions.split(',') if x.strip()})
         sickbeard.NAMING_CUSTOM_ABD = config.checkbox_to_value(naming_custom_abd)
         sickbeard.NAMING_CUSTOM_SPORTS = config.checkbox_to_value(naming_custom_sports)
@@ -4945,10 +4933,13 @@ class ConfigNotifications(Config):
         sickbeard.PLEX_SERVER_HOST = config.clean_hosts(plex_server_host)
         sickbeard.PLEX_SERVER_TOKEN = config.clean_host(plex_server_token)
         sickbeard.PLEX_SERVER_USERNAME = plex_server_username
-        sickbeard.PLEX_SERVER_PASSWORD = plex_server_password
+        if plex_server_password != '*' * len(sickbeard.PLEX_SERVER_PASSWORD):
+            sickbeard.PLEX_SERVER_PASSWORD = plex_server_password
+
         sickbeard.USE_PLEX_CLIENT = config.checkbox_to_value(use_plex_client)
         sickbeard.PLEX_CLIENT_USERNAME = plex_client_username
-        sickbeard.PLEX_CLIENT_PASSWORD = plex_client_password
+        if plex_client_password != '*' * len(sickbeard.PLEX_CLIENT_PASSWORD):
+            sickbeard.PLEX_CLIENT_PASSWORD = plex_client_password
         sickbeard.PLEX_SERVER_HTTPS = config.checkbox_to_value(plex_server_https)
 
         sickbeard.USE_EMBY = config.checkbox_to_value(use_emby)
@@ -5112,9 +5103,10 @@ class ConfigSubtitles(Config):
                         controller="config", action="subtitles")
 
     def saveSubtitles(self, use_subtitles=None, subtitles_plugins=None, subtitles_languages=None, subtitles_dir=None, subtitles_perfect_match=None,
-                      service_order=None, subtitles_history=None, subtitles_finder_frequency=None, subtitles_download_in_pp=None,
+                      service_order=None, subtitles_history=None, subtitles_finder_frequency=None,
                       subtitles_multi=None, embedded_subtitles_all=None, subtitles_extra_scripts=None, subtitles_hearing_impaired=None,
-                      addic7ed_user=None, addic7ed_pass=None, legendastv_user=None, legendastv_pass=None, opensubtitles_user=None, opensubtitles_pass=None):
+                      addic7ed_user=None, addic7ed_pass=None, legendastv_user=None, legendastv_pass=None, opensubtitles_user=None, opensubtitles_pass=None,
+                      subtitles_download_in_pp=None, subtitles_keep_only_wanted=None):
 
         results = []
 
@@ -5127,8 +5119,9 @@ class ConfigSubtitles(Config):
         sickbeard.SUBTITLES_HISTORY = config.checkbox_to_value(subtitles_history)
         sickbeard.EMBEDDED_SUBTITLES_ALL = config.checkbox_to_value(embedded_subtitles_all)
         sickbeard.SUBTITLES_HEARING_IMPAIRED = config.checkbox_to_value(subtitles_hearing_impaired)
-        sickbeard.SUBTITLES_MULTI = config.checkbox_to_value(subtitles_multi)
+        sickbeard.SUBTITLES_MULTI = 1 if len(sickbeard.SUBTITLES_LANGUAGES) > 1 else config.checkbox_to_value(subtitles_multi)
         sickbeard.SUBTITLES_DOWNLOAD_IN_PP = config.checkbox_to_value(subtitles_download_in_pp)
+        sickbeard.SUBTITLES_KEEP_ONLY_WANTED = config.checkbox_to_value(subtitles_keep_only_wanted)
         sickbeard.SUBTITLES_EXTRA_SCRIPTS = [x.strip() for x in subtitles_extra_scripts.split('|') if x.strip()]
 
         # Subtitles services
@@ -5209,7 +5202,7 @@ class ErrorLogs(WebRoot):
         menu = [
             {'title': 'Clear Errors', 'path': 'errorlogs/clearerrors/', 'requires': self.haveErrors() and level == logger.ERROR, 'icon': 'ui-icon ui-icon-trash'},
             {'title': 'Clear Warnings', 'path': 'errorlogs/clearerrors/?level=' + str(logger.WARNING), 'requires': self.haveWarnings() and level == logger.WARNING, 'icon': 'ui-icon ui-icon-trash'},
-            {'title': 'Submit Errors', 'path': 'errorlogs/submit_errors/', 'requires': self.haveErrors() and level == logger.ERROR, 'class': 'sumbiterrors', 'confirm': True, 'icon': 'ui-icon ui-icon-arrowreturnthick-1-n'},
+            {'title': 'Submit Errors', 'path': 'errorlogs/submit_errors/', 'requires': self.haveErrors() and level == logger.ERROR, 'class': 'submiterrors', 'confirm': True, 'icon': 'ui-icon ui-icon-arrowreturnthick-1-n'},
         ]
 
         return menu

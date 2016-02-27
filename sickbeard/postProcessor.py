@@ -242,7 +242,7 @@ class PostProcessor(object):  # pylint: disable=too-many-instance-attributes
             # Add the extensions that the user doesn't allow to the 'extensions_to_delete' list
             if sickbeard.MOVE_ASSOCIATED_FILES:
                 allowed_extensions = sickbeard.ALLOWED_EXTENSIONS.split(",")
-                if not associated_file_path[-3:] in allowed_extensions:
+                if not associated_file_path.rpartition('.')[2] in allowed_extensions:
                     if ek(os.path.isfile, associated_file_path):
                         extensions_to_delete.append(associated_file_path)
 
@@ -576,8 +576,11 @@ class PostProcessor(object):  # pylint: disable=too-many-instance-attributes
         name = helpers.remove_non_release_groups(remove_extension(name))
 
         # parse the name to break it into show name, season, and episode
-        np = NameParser(True, tryIndexers=True)
-        parse_result = np.parse(name)
+        try:
+            parse_result = NameParser(True, tryIndexers=True).parse(name)
+        except (InvalidNameException, InvalidShowException) as error:
+            logger.log(u"{}".format(error), logger.DEBUG)
+            return to_return
 
         # show object
         show = parse_result.show
@@ -659,9 +662,9 @@ class PostProcessor(object):  # pylint: disable=too-many-instance-attributes
         for cur_attempt in attempt_list:
 
             try:
-                (cur_show, cur_season, cur_episodes, cur_quality, cur_version) = cur_attempt()
-            except (InvalidNameException, InvalidShowException) as e:
-                logger.log(u"Unable to parse, skipping: " + ex(e), logger.DEBUG)
+                cur_show, cur_season, cur_episodes, cur_quality, cur_version = cur_attempt()
+            except (InvalidNameException, InvalidShowException) as error:
+                logger.log(u"{}".format(error), logger.DEBUG)
                 continue
 
             if not cur_show:
@@ -1165,11 +1168,7 @@ class PostProcessor(object):  # pylint: disable=too-many-instance-attributes
             main_db_con = db.DBConnection()
             main_db_con.mass_action(sql_l)
 
-        # set file modify stamp to show airdate
-        if sickbeard.AIRDATE_EPISODES:
-            for cur_ep in [ep_obj] + ep_obj.relatedEps:
-                with cur_ep.lock:
-                    cur_ep.airdateModifyStamp()
+        cur_ep.airdateModifyStamp()
 
         # generate nfo/tbn
         try:
