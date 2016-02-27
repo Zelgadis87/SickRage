@@ -472,7 +472,9 @@ class TraktChecker():
             self.todoWanted.remove(episode)
             setEpisodeToWanted(show, episode[1], episode[2])
 
-    def _checkInList(self,trakt_id, showid, season, episode, List = None):
+        self._updateShowNextEpisodeData(show)
+
+    def _checkInList(self, trakt_id, showid, season, episode, List=None):
         """
          Check in the Watchlist or CollectionList for Show
          Is the Show, Season and Episode in the trakt_id list (tvdb / tvrage)
