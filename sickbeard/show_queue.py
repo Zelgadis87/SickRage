@@ -41,6 +41,7 @@ from sickbeard.helpers import makeDir, chmodAsParent
 from sickrage.helper.common import sanitize_filename
 import time
 
+
 class ShowQueue(generic_queue.GenericQueue):
     def __init__(self):
         generic_queue.GenericQueue.__init__(self)
@@ -146,7 +147,7 @@ class ShowQueue(generic_queue.GenericQueue):
         return queueItemObj
 
     def addShow(self, indexer, indexer_id, showDir, default_status=None, quality=None, flatten_folders=None, stay_ahead=0,
-                lang=None, subtitles=None, anime=None, scene=None, paused=None, blacklist=None, whitelist=None, 
+                lang=None, subtitles=None, anime=None, scene=None, paused=None, blacklist=None, whitelist=None,
                 default_status_after=None, root_dir=None):
 
         if lang is None:
@@ -302,8 +303,8 @@ class QueueItemAdd(ShowQueueItem):
 
             t = sickbeard.indexerApi(self.indexer).indexer(**lINDEXER_API_PARMS)
             s = t[self.indexer_id]
-            
-            ## Let's try to create the show Dir if it's not provided. This way we force the show dir to build build using the
+
+            # Let's try to create the show Dir if it's not provided. This way we force the show dir to build build using the
             # Indexers provided series name
             if not self.showDir and self.root_dir:
                 show_name = get_showname_from_indexer(self.indexer, self.indexer_id, self.lang)
@@ -313,17 +314,17 @@ class QueueItemAdd(ShowQueueItem):
                     if not dir_exists:
                         logger.log(u"Unable to create the folder {0}, can't add the show".format(self.showDir))
                         return
-                
+
                     chmodAsParent(self.showDir)
                 else:
                     logger.log(u"Unable to get a show {0}, can't add the show".format(self.showDir))
                     return
-                
+
             # this usually only happens if they have an NFO in their show dir which gave us a Indexer ID that has no proper english version of the show
             if getattr(s, 'seriesname', None) is None:
-                logger.log(u"Show in " + self.showDir + " has no name on " + str(
-                    sickbeard.indexerApi(self.indexer).name) + ", probably the wrong language used to search with.",
-                    logger.ERROR)
+                logger.log(u"Show in {} has no name on {}, probably searched with the wrong language.".format
+                           (self.showDir, sickbeard.indexerApi(self.indexer).name), logger.ERROR)
+
                 ui.notifications.error("Unable to add show",
                                        "Show in " + self.showDir + " has no name on " + str(sickbeard.indexerApi(
                                            self.indexer).name) + ", probably the wrong language. Delete .nfo and add manually in the correct language.")
@@ -520,7 +521,7 @@ class QueueItemRefresh(ShowQueueItem):
         ShowQueueItem.__init__(self, ShowQueueActions.REFRESH, show)
 
         # do refreshes first because they're quick
-        self.priority = generic_queue.QueuePriorities.NORMAL
+        self.priority = generic_queue.QueuePriorities.HIGH
 
         # force refresh certain items
         self.force = force
@@ -600,6 +601,7 @@ class QueueItemUpdate(ShowQueueItem):
     def __init__(self, show=None):
         ShowQueueItem.__init__(self, ShowQueueActions.UPDATE, show)
         self.force = False
+        self.priority = generic_queue.QueuePriorities.HIGH
 
     def run(self):
 
@@ -689,6 +691,7 @@ class QueueItemForceUpdate(QueueItemUpdate):
     def __init__(self, show=None):
         ShowQueueItem.__init__(self, ShowQueueActions.FORCEUPDATE, show)
         self.force = True
+        self.priority = generic_queue.QueuePriorities.HIGH
 
 
 class QueueItemRemove(ShowQueueItem):

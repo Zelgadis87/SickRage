@@ -46,7 +46,7 @@ class MainSanityCheck(db.DBSanityCheck):
         self.fix_tvrage_show_statues()
         self.fix_episode_statuses()
         self.fix_invalid_airdates()
-        self.fix_subtitles_codes()
+        # self.fix_subtitles_codes()
         self.fix_show_nfo_lang()
         self.convert_tvrage_to_tvdb()
         self.convert_archived_to_compound()
@@ -424,8 +424,7 @@ class AddSizeAndSceneNameFields(InitialSchema):
             for cur_name in (nzb_name, file_name):
                 logger.log(u"Checking if " + cur_name + " is actually a good release name", logger.DEBUG)
                 try:
-                    np = NameParser(False)
-                    parse_result = np.parse(cur_name)
+                    parse_result = NameParser(False).parse(cur_name)
                 except (InvalidNameException, InvalidShowException):
                     continue
 
@@ -449,8 +448,7 @@ class AddSizeAndSceneNameFields(InitialSchema):
                 continue
 
             try:
-                np = NameParser(False)
-                parse_result = np.parse(ep_file_name)
+                parse_result = NameParser(False).parse(ep_file_name)
             except (InvalidNameException, InvalidShowException):
                 continue
 

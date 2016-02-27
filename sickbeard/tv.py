@@ -431,11 +431,9 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
             ep_file_name = ek(os.path.splitext, ep_file_name)[0]
 
             try:
-                parse_result = None
-                np = NameParser(False, showObj=self, tryIndexers=True)
-                parse_result = np.parse(ep_file_name)
+                parse_result = NameParser(False, showObj=self, tryIndexers=True).parse(ep_file_name)
             except (InvalidNameException, InvalidShowException):
-                pass
+                parse_result = None
 
             if ' ' not in ep_file_name and parse_result and parse_result.release_group:
                 logger.log(
@@ -600,7 +598,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
             main_db_con.mass_action(sql_l)
 
         # Done updating save last update date
-        self.last_update_indexer = datetime.date.today().toordinal()
+        self.last_update_indexer = datetime.datetime.now().toordinal()
 
         self.saveToDB()
 
@@ -637,15 +635,9 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
                    (self.indexerid, filepath), logger.DEBUG)
 
         try:
-            myParser = NameParser(showObj=self, tryIndexers=True, parse_method=('normal', 'anime')[self.is_anime])
-            parse_result = myParser.parse(filepath)
-        except InvalidNameException:
-            logger.log(u"{}: Unable to parse the file {} into a valid episode".format
-                       (self.indexerid, filepath), logger.DEBUG)
-            return None
-        except InvalidShowException:
-            logger.log(u"{}: Unable to parse the file {} into a valid show".format
-                       (self.indexerid, filepath), logger.DEBUG)
+            parse_result = NameParser(showObj=self, tryIndexers=True, parse_method=('normal', 'anime')[self.is_anime]).parse(filepath)
+        except (InvalidNameException, InvalidShowException) as error:
+            logger.log(u"{}: {}".format(self.indexerid, error), logger.DEBUG)
             return None
 
         episodes = [ep for ep in parse_result.episode_numbers if ep is not None]
@@ -971,8 +963,6 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
         logger.log(str(self.indexerid) + u": Obtained info from IMDb ->" + str(self.imdb_info), logger.DEBUG)
 
     def nextEpisode(self):
-        logger.log(str(self.indexerid) + ": Finding the episode which airs next", logger.DEBUG)
-
         curDate = datetime.date.today().toordinal()
         if not self.nextaired or self.nextaired and curDate > self.nextaired:
             main_db_con = db.DBConnection()
@@ -980,15 +970,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
                 "SELECT airdate, season, episode FROM tv_episodes WHERE showid = ? AND airdate >= ? AND status IN (?,?) ORDER BY airdate ASC LIMIT 1",
                 [self.indexerid, datetime.date.today().toordinal(), UNAIRED, WANTED])
 
-            if sql_results is None or len(sql_results) == 0:
-                logger.log(u"{id}: No episode found... need to implement a show status".format
-                           (id=self.indexerid), logger.DEBUG)
-                self.nextaired = u''
-            else:
-                logger.log(u"{id}: Found episode {ep}".format
-                           (id=self.indexerid, ep=episode_num(sql_results[0]["season"], sql_results[0]["episode"])),
-                           logger.DEBUG)
-                self.nextaired = sql_results[0]['airdate']
+            self.nextaired = sql_results[0]['airdate'] if sql_results else u''
 
         return self.nextaired
 
@@ -1117,13 +1099,6 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
                         curEp.release_name = ''
 
                         sql_l.append(curEp.get_sql())
-
-            # Disable update in each show refresh. Taking too long with large libraries
-            # else:
-            #     # the file exists, set its modify file stamp
-            #     if sickbeard.AIRDATE_EPISODES:
-            #         with curEp.lock:
-            #             curEp.airdateModifyStamp()
 
         if sql_l:
             main_db_con = db.DBConnection()
@@ -2113,10 +2088,9 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
                 return ''
 
             try:
-                np = NameParser(name, showObj=show, naming_pattern=True)
-                parse_result = np.parse(name)
+                parse_result = NameParser(name, showObj=show, naming_pattern=True).parse(name)
             except (InvalidNameException, InvalidShowException) as e:
-                logger.log(u"Unable to get parse release_group: " + ex(e), logger.DEBUG)
+                logger.log(u"Unable to get parse release_group: {}".format(e), logger.DEBUG)
                 return ''
 
             if not parse_result.release_group:
@@ -2545,37 +2519,41 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
         Note: Also called from postProcessor
 
         """
-
-        if not self.show.airs and self.show.network:
+        if not all([sickbeard.AIRDATE_EPISODES, self.airdate, self.location,
+                    self.show, self.show.airs, self.show.network]):
             return
 
-        airdate_ordinal = self.airdate.toordinal()
-        if airdate_ordinal < 1:
-            return
+        try:
+            airdate_ordinal = self.airdate.toordinal()
+            if airdate_ordinal < 1:
+                return
 
-        airdatetime = network_timezones.parse_date_time(airdate_ordinal, self.show.airs, self.show.network)
+            airdatetime = network_timezones.parse_date_time(airdate_ordinal, self.show.airs, self.show.network)
 
-        if sickbeard.FILE_TIMESTAMP_TIMEZONE == 'local':
-            airdatetime = airdatetime.astimezone(network_timezones.sb_timezone)
+            if sickbeard.FILE_TIMESTAMP_TIMEZONE == 'local':
+                airdatetime = airdatetime.astimezone(network_timezones.sb_timezone)
 
-        filemtime = datetime.datetime.fromtimestamp(ek(os.path.getmtime, self.location)).replace(tzinfo=network_timezones.sb_timezone)
+            filemtime = datetime.datetime.fromtimestamp(ek(os.path.getmtime, self.location)).replace(tzinfo=network_timezones.sb_timezone)
 
-        if filemtime != airdatetime:
-            import time
+            if filemtime != airdatetime:
+                import time
 
-            airdatetime = airdatetime.timetuple()
-            logger.log(str(self.show.indexerid) + u": About to modify date of '" + self.location +
-                       "' to show air date " + time.strftime("%b %d,%Y (%H:%M)", airdatetime), logger.DEBUG)
-            try:
-                if helpers.touchFile(self.location, time.mktime(airdatetime)):
-                    logger.log(str(self.show.indexerid) + u": Changed modify date of " + ek(os.path.basename, self.location) +
-                               " to show air date " + time.strftime("%b %d,%Y (%H:%M)", airdatetime))
-                else:
-                    logger.log(str(self.show.indexerid) + u": Unable to modify date of " + ek(os.path.basename, self.location) +
-                               " to show air date " + time.strftime("%b %d,%Y (%H:%M)", airdatetime), logger.WARNING)
-            except Exception as e:
-                logger.log(str(self.show.indexerid) + u": Failed to modify date of '" + ek(os.path.basename, self.location) +
-                           "' to show air date " + time.strftime("%b %d,%Y (%H:%M)", airdatetime) + ". Error: %s" % ex(e), logger.WARNING)
+                airdatetime = airdatetime.timetuple()
+                logger.log(u"{}: About to modify date of '{}' to show air date {}".format
+                           (self.show.indexerid, self.location, time.strftime("%b %d,%Y (%H:%M)", airdatetime)), logger.DEBUG)
+                try:
+                    if helpers.touchFile(self.location, time.mktime(airdatetime)):
+                        logger.log(u"{}: Changed modify date of '{}' to show air date {}".format
+                                   (self.show.indexerid, ek(os.path.basename, self.location), time.strftime("%b %d,%Y (%H:%M)", airdatetime)))
+                    else:
+                        logger.log(u"{}: Unable to modify date of '{}' to show air date {}".format
+                                   (self.show.indexerid, ek(os.path.basename, self.location), time.strftime("%b %d,%Y (%H:%M)", airdatetime)), logger.WARNING)
+                except Exception:
+                    logger.log(u"{}: Failed to modify date of '{}' to show air date {}".format
+                               (self.show.indexerid, ek(os.path.basename, self.location), time.strftime("%b %d,%Y (%H:%M)", airdatetime)), logger.WARNING)
+        except Exception:
+            logger.log(u"{}: Failed to modify date of '{}'".format
+                       (self.show.indexerid, ek(os.path.basename, self.location)), logger.WARNING)
 
     def __getstate__(self):
         d = dict(self.__dict__)

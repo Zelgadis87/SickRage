@@ -16,6 +16,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
+# pylint: disable=too-many-lines
 
 import datetime
 import socket
@@ -35,10 +36,9 @@ from github import Github
 
 from sickbeard import metadata
 from sickbeard import providers
-from sickbeard.config import CheckSection, check_setting_int, check_setting_str, check_setting_float, ConfigMigrator, \
-    naming_ep_type
+from sickbeard.config import CheckSection, check_setting_int, check_setting_str, check_setting_float, ConfigMigrator
 from sickbeard import searchBacklog, showUpdater, versionChecker, properFinder, auto_postprocessor, \
-    subtitles, traktChecker, numdict
+    subtitles, traktChecker
 from sickbeard import db
 from sickbeard import helpers
 from sickbeard import scheduler
@@ -49,8 +49,7 @@ from sickbeard import naming
 from sickbeard import dailysearcher
 from sickbeard.indexers import indexer_api
 from sickbeard.indexers.indexer_exceptions import indexer_shownotfound, indexer_showincomplete, indexer_exception, \
-    indexer_error, indexer_episodenotfound, indexer_attributenotfound, indexer_seasonnotfound, indexer_userabort, \
-    indexerExcepts
+    indexer_error, indexer_episodenotfound, indexer_attributenotfound, indexer_seasonnotfound, indexer_userabort
 from sickbeard.common import SD
 from sickbeard.common import SKIPPED
 from sickbeard.common import WANTED
@@ -149,7 +148,7 @@ started = False
 ACTUAL_LOG_DIR = None
 LOG_DIR = None
 LOG_NR = 5
-LOG_SIZE = 1
+LOG_SIZE = 10.0
 
 SOCKET_TIMEOUT = None
 
@@ -352,6 +351,7 @@ PLEX_SERVER_TOKEN = None
 PLEX_CLIENT_HOST = None
 PLEX_SERVER_USERNAME = None
 PLEX_SERVER_PASSWORD = None
+
 USE_PLEX_CLIENT = False
 PLEX_CLIENT_USERNAME = None
 PLEX_CLIENT_PASSWORD = None
@@ -536,6 +536,7 @@ SUBTITLES_FINDER_FREQUENCY = 1
 SUBTITLES_MULTI = False
 SUBTITLES_EXTRA_SCRIPTS = []
 SUBTITLES_DOWNLOAD_IN_PP = False
+SUBTITLES_KEEP_ONLY_WANTED = False
 
 ADDIC7ED_USER = None
 ADDIC7ED_PASS = None
@@ -552,7 +553,12 @@ DELETE_FAILED = False
 EXTRA_SCRIPTS = []
 
 IGNORE_WORDS = "german,french,core2hd,dutch,swedish,reenc,MrLss"
-TRACKERS_LIST = "udp://coppersurfer.tk:6969/announce,udp://open.demonii.com:1337,udp://exodus.desync.com:6969,udp://9.rarbg.me:2710/announce,udp://glotorrents.pw:6969/announce,udp://tracker.openbittorrent.com:80/announce,udp://9.rarbg.to:2710/announce"
+
+TRACKERS_LIST = "udp://coppersurfer.tk:6969/announce,udp://open.demonii.com:1337,"
+TRACKERS_LIST += "udp://exodus.desync.com:6969,udp://9.rarbg.me:2710/announce,"
+TRACKERS_LIST += "udp://glotorrents.pw:6969/announce,udp://tracker.openbittorrent.com:80/announce,"
+TRACKERS_LIST += "udp://9.rarbg.to:2710/announce"
+
 REQUIRE_WORDS = ""
 IGNORED_SUBS_LIST = "dk,fin,heb,kor,nor,nordic,pl,swe"
 SYNC_FILES = "!sync,lftp-pget-status,part,bts,!qb"
@@ -584,9 +590,9 @@ def get_backlog_cycle_time():
     return max([cycletime, 720])
 
 
-def initialize(consoleLogging=True):
+def initialize(consoleLogging=True):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
     with INIT_LOCK:
-
+        # pylint: disable=global-statement
         global BRANCH, GIT_RESET, GIT_REMOTE, GIT_REMOTE_URL, CUR_COMMIT_HASH, CUR_COMMIT_BRANCH, ACTUAL_LOG_DIR, LOG_DIR, LOG_NR, LOG_SIZE, WEB_PORT, WEB_LOG, ENCRYPTION_VERSION, ENCRYPTION_SECRET, WEB_ROOT, WEB_USERNAME, WEB_PASSWORD, WEB_HOST, WEB_IPV6, WEB_COOKIE_SECRET, WEB_USE_GZIP, API_KEY, ENABLE_HTTPS, HTTPS_CERT, HTTPS_KEY, \
             HANDLE_REVERSE_PROXY, USE_NZBS, USE_TORRENTS, NZB_METHOD, NZB_DIR, DOWNLOAD_PROPERS, RANDOMIZE_PROVIDERS, CHECK_PROPERS_INTERVAL, ALLOW_HIGH_PRIORITY, SAB_FORCED, TORRENT_METHOD, NOTIFY_ON_LOGIN, \
             SAB_USERNAME, SAB_PASSWORD, SAB_APIKEY, SAB_CATEGORY, SAB_CATEGORY_BACKLOG, SAB_CATEGORY_ANIME, SAB_CATEGORY_ANIME_BACKLOG, SAB_HOST, \
@@ -598,7 +604,7 @@ def initialize(consoleLogging=True):
             USE_PLEX_SERVER, PLEX_NOTIFY_ONSNATCH, PLEX_NOTIFY_ONDOWNLOAD, PLEX_NOTIFY_ONSUBTITLEDOWNLOAD, PLEX_UPDATE_LIBRARY, USE_PLEX_CLIENT, PLEX_CLIENT_USERNAME, PLEX_CLIENT_PASSWORD, \
             PLEX_SERVER_HOST, PLEX_SERVER_TOKEN, PLEX_CLIENT_HOST, PLEX_SERVER_USERNAME, PLEX_SERVER_PASSWORD, PLEX_SERVER_HTTPS, MIN_BACKLOG_FREQUENCY, SKIP_REMOVED_FILES, ALLOWED_EXTENSIONS, \
             USE_EMBY, EMBY_HOST, EMBY_APIKEY, \
-            showUpdateScheduler, __INITIALIZED__, INDEXER_DEFAULT_LANGUAGE, EP_DEFAULT_DELETED_STATUS, LAUNCH_BROWSER, TRASH_REMOVE_SHOW, TRASH_ROTATE_LOGS, SORT_ARTICLE, showList, \
+            showUpdateScheduler, __INITIALIZED__, INDEXER_DEFAULT_LANGUAGE, EP_DEFAULT_DELETED_STATUS, LAUNCH_BROWSER, TRASH_REMOVE_SHOW, TRASH_ROTATE_LOGS, SORT_ARTICLE, \
             NEWZNAB_DATA, NZBS, NZBS_UID, NZBS_HASH, INDEXER_DEFAULT, INDEXER_TIMEOUT, USENET_RETENTION, TORRENT_DIR, \
             QUALITY_DEFAULT, FLATTEN_FOLDERS_DEFAULT, STAY_AHEAD_DEFAULT, SUBTITLES_DEFAULT, STATUS_DEFAULT, STATUS_DEFAULT_AFTER, \
             GROWL_NOTIFY_ONSNATCH, GROWL_NOTIFY_ONDOWNLOAD, GROWL_NOTIFY_ONSUBTITLEDOWNLOAD, TWITTER_NOTIFY_ONSNATCH, TWITTER_NOTIFY_ONDOWNLOAD, TWITTER_NOTIFY_ONSUBTITLEDOWNLOAD, USE_FREEMOBILE, FREEMOBILE_ID, FREEMOBILE_APIKEY, FREEMOBILE_NOTIFY_ONSNATCH, FREEMOBILE_NOTIFY_ONDOWNLOAD, FREEMOBILE_NOTIFY_ONSUBTITLEDOWNLOAD, \
@@ -625,7 +631,7 @@ def initialize(consoleLogging=True):
             GUI_NAME, HOME_LAYOUT, HISTORY_LAYOUT, DISPLAY_SHOW_SPECIALS, COMING_EPS_LAYOUT, COMING_EPS_SORT, COMING_EPS_DISPLAY_PAUSED, COMING_EPS_MISSED_RANGE, FUZZY_DATING, TRIM_ZERO, DATE_PRESET, TIME_PRESET, TIME_PRESET_W_SECONDS, THEME_NAME, \
             POSTER_SORTBY, POSTER_SORTDIR, HISTORY_LIMIT, CREATE_MISSING_SHOW_DIRS, ADD_SHOWS_WO_DIR, \
             METADATA_WDTV, METADATA_TIVO, METADATA_MEDE8ER, IGNORE_WORDS, TRACKERS_LIST, IGNORED_SUBS_LIST, REQUIRE_WORDS, CALENDAR_UNPROTECTED, CALENDAR_ICONS, NO_RESTART, \
-            USE_SUBTITLES, SUBTITLES_LANGUAGES, SUBTITLES_DIR, SUBTITLES_SERVICES_LIST, SUBTITLES_SERVICES_ENABLED, SUBTITLES_HISTORY, SUBTITLES_FINDER_FREQUENCY, SUBTITLES_MULTI, SUBTITLES_DOWNLOAD_IN_PP, EMBEDDED_SUBTITLES_ALL, SUBTITLES_EXTRA_SCRIPTS, SUBTITLES_PERFECT_MATCH, subtitlesFinderScheduler, \
+            USE_SUBTITLES, SUBTITLES_LANGUAGES, SUBTITLES_DIR, SUBTITLES_SERVICES_LIST, SUBTITLES_SERVICES_ENABLED, SUBTITLES_HISTORY, SUBTITLES_FINDER_FREQUENCY, SUBTITLES_MULTI, SUBTITLES_DOWNLOAD_IN_PP, SUBTITLES_KEEP_ONLY_WANTED, EMBEDDED_SUBTITLES_ALL, SUBTITLES_EXTRA_SCRIPTS, SUBTITLES_PERFECT_MATCH, subtitlesFinderScheduler, \
             SUBTITLES_HEARING_IMPAIRED, ADDIC7ED_USER, ADDIC7ED_PASS, LEGENDASTV_USER, LEGENDASTV_PASS, OPENSUBTITLES_USER, OPENSUBTITLES_PASS, \
             USE_FAILED_DOWNLOADS, DELETE_FAILED, ANON_REDIRECT, LOCALHOST_IP, DEBUG, DBDEBUG, DEFAULT_PAGE, PROXY_SETTING, PROXY_INDEXERS, \
             AUTOPOSTPROCESSER_FREQUENCY, SHOWUPDATE_HOUR, \
@@ -679,10 +685,12 @@ def initialize(consoleLogging=True):
         ACTUAL_LOG_DIR = check_setting_str(CFG, 'General', 'log_dir', 'Logs')
         LOG_DIR = ek(os.path.normpath, ek(os.path.join, DATA_DIR, ACTUAL_LOG_DIR))
         LOG_NR = check_setting_int(CFG, 'General', 'log_nr', 5)  # Default to 5 backup file (sickrage.log.x)
-        LOG_SIZE = check_setting_int(CFG, 'General', 'log_size', 1)  # Default to max 1MB per logfile
+        LOG_SIZE = check_setting_float(CFG, 'General', 'log_size', 10.0)  # Default to max 10MB per logfile
+
         if LOG_SIZE > 100:
-            LOG_SIZE = 1
+            LOG_SIZE = 10.0
         fileLogging = True
+
         if not helpers.makeDir(LOG_DIR):
             sys.stderr.write("!!! No log folder, logging to screen only!\n")
             fileLogging = False
@@ -690,15 +698,19 @@ def initialize(consoleLogging=True):
         # init logging
         logger.init_logging(console_logging=consoleLogging, file_logging=fileLogging, debug_logging=DEBUG, database_logging=DBDEBUG)
 
-        # github api
         try:
-            if not (GIT_USERNAME and GIT_PASSWORD):
-                gh = Github(user_agent="SickRage").get_organization(GIT_ORG).get_repo(GIT_REPO)
-            else:
+            if GIT_USERNAME and GIT_PASSWORD:
                 gh = Github(login_or_token=GIT_USERNAME, password=GIT_PASSWORD, user_agent="SickRage").get_organization(GIT_ORG).get_repo(GIT_REPO)
-        except Exception as e:
+        except Exception as error:
+            logger.log(u'Unable to setup GitHub properly with your github login. Please check your credentials. Error: {}'.format(error), logger.WARNING)
             gh = None
-            logger.log(u'Unable to setup GitHub properly. GitHub will not be available. Error: %s' % str(e), logger.WARNING)
+
+        if not gh:
+            try:
+                gh = Github(user_agent="SickRage").get_organization(GIT_ORG).get_repo(GIT_REPO)
+            except Exception as error:
+                logger.log(u'Unable to setup GitHub properly. GitHub will not be available. Error: {}'.format(error), logger.WARNING)
+                gh = None
 
         # git reset on update
         GIT_RESET = bool(check_setting_int(CFG, 'General', 'git_reset', 1))
@@ -1176,6 +1188,7 @@ def initialize(consoleLogging=True):
         SUBTITLES_FINDER_FREQUENCY = check_setting_int(CFG, 'Subtitles', 'subtitles_finder_frequency', 1)
         SUBTITLES_MULTI = bool(check_setting_int(CFG, 'Subtitles', 'subtitles_multi', 1))
         SUBTITLES_DOWNLOAD_IN_PP = bool(check_setting_int(CFG, 'Subtitles', 'subtitles_download_in_pp', 0))
+        SUBTITLES_KEEP_ONLY_WANTED = bool(check_setting_int(CFG, 'Subtitles', 'subtitles_keep_only_wanted', 0))
         SUBTITLES_EXTRA_SCRIPTS = [x.strip() for x in check_setting_str(CFG, 'Subtitles', 'subtitles_extra_scripts', '').split('|') if x.strip()]
 
         ADDIC7ED_USER = check_setting_str(CFG, 'Subtitles', 'addic7ed_username', '', censor_log=True)
@@ -1414,17 +1427,17 @@ def initialize(consoleLogging=True):
                                                     silent=False)
 
         showQueueScheduler = scheduler.Scheduler(show_queue.ShowQueue(),
-                                                 cycleTime=datetime.timedelta(seconds=3),
+                                                 cycleTime=datetime.timedelta(seconds=5),
                                                  threadName="SHOWQUEUE")
 
         showUpdateScheduler = scheduler.Scheduler(showUpdater.ShowUpdater(),
-                                                  cycleTime=datetime.timedelta(hours=1),
+                                                  cycleTime=datetime.timedelta(hours=24),
                                                   threadName="SHOWUPDATER",
                                                   start_time=datetime.time(hour=SHOWUPDATE_HOUR, minute=random.randint(0, 59)))
 
         # searchers
         searchQueueScheduler = scheduler.Scheduler(search_queue.SearchQueue(),
-                                                   cycleTime=datetime.timedelta(seconds=3),
+                                                   cycleTime=datetime.timedelta(seconds=5),
                                                    threadName="SEARCHQUEUE")
 
         # TODO: update_interval should take last daily/backlog times into account!
@@ -1466,9 +1479,11 @@ def initialize(consoleLogging=True):
                                                     threadName="TRAKTCHECKER",
                                                     silent=not USE_TRAKT)
 
+        update_interval = datetime.timedelta(hours=SUBTITLES_FINDER_FREQUENCY)
         subtitlesFinderScheduler = scheduler.Scheduler(subtitles.SubtitlesFinder(),
-                                                       cycleTime=datetime.timedelta(hours=SUBTITLES_FINDER_FREQUENCY),
+                                                       cycleTime=update_interval,
                                                        threadName="FINDSUBTITLES",
+                                                       run_delay=update_interval,
                                                        silent=not USE_SUBTITLES)
 
         __INITIALIZED__ = True
@@ -1476,7 +1491,7 @@ def initialize(consoleLogging=True):
 
 
 def start():
-    global started
+    global started  # pylint: disable=global-statement
 
     with INIT_LOCK:
         if __INITIALIZED__:
@@ -1547,7 +1562,7 @@ def start():
 
 
 def halt():
-    global __INITIALIZED__, started
+    global __INITIALIZED__, started  # pylint: disable=global-statement
 
     with INIT_LOCK:
 
@@ -1610,7 +1625,7 @@ def saveAll():
     save_config()
 
 
-def save_config():
+def save_config():  # pylint: disable=too-many-statements, too-many-branches
     new_config = ConfigObj()
     new_config.filename = CONFIG_FILE
 
@@ -1629,7 +1644,7 @@ def save_config():
     new_config['General']['encryption_secret'] = ENCRYPTION_SECRET
     new_config['General']['log_dir'] = ACTUAL_LOG_DIR if ACTUAL_LOG_DIR else 'Logs'
     new_config['General']['log_nr'] = int(LOG_NR)
-    new_config['General']['log_size'] = int(LOG_SIZE)
+    new_config['General']['log_size'] = float(LOG_SIZE)
     new_config['General']['socket_timeout'] = SOCKET_TIMEOUT
     new_config['General']['web_port'] = WEB_PORT
     new_config['General']['web_host'] = WEB_HOST
@@ -2128,6 +2143,7 @@ def save_config():
     new_config['Subtitles']['subtitles_multi'] = int(SUBTITLES_MULTI)
     new_config['Subtitles']['subtitles_extra_scripts'] = '|'.join(SUBTITLES_EXTRA_SCRIPTS)
     new_config['Subtitles']['subtitles_download_in_pp'] = int(SUBTITLES_DOWNLOAD_IN_PP)
+    new_config['Subtitles']['subtitles_keep_only_wanted'] = int(SUBTITLES_KEEP_ONLY_WANTED)
     new_config['Subtitles']['addic7ed_username'] = ADDIC7ED_USER
     new_config['Subtitles']['addic7ed_password'] = helpers.encrypt(ADDIC7ED_PASS, ENCRYPTION_VERSION)
 

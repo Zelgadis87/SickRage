@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import re
 
 import chardet
-from guessit import guessit
 from codecs import lookup
 import pysrt
 
-from .video import Episode, Movie
+from .video import Episode, Movie, sanitize, sanitize_release_group
 
 logger = logging.getLogger(__name__)
 
@@ -143,76 +141,22 @@ class Subtitle(object):
 
         return encoding
 
-    def get_matches(self, video, hearing_impaired=False):
+    def get_matches(self, video):
         """Get the matches against the `video`.
 
         :param video: the video to get the matches with.
         :type video: :class:`~subliminal.video.Video`
-        :param bool hearing_impaired: hearing impaired preference.
         :return: matches of the subtitle.
         :rtype: set
 
         """
-        matches = set()
-
-        # hearing_impaired
-        if self.hearing_impaired == hearing_impaired:
-            matches.add('hearing_impaired')
-
-        return matches
+        raise NotImplementedError
 
     def __hash__(self):
         return hash(self.provider_name + '-' + self.id)
 
     def __repr__(self):
         return '<%s %r [%s]>' % (self.__class__.__name__, self.id, self.language)
-
-
-def compute_score(matches, video, scores=None):
-    """Compute the score of the `matches` against the `video`.
-
-    Some matches count as much as a combination of others in order to level the final score:
-
-      * `hash` removes everything else
-      * For :class:`~subliminal.video.Episode`
-
-        * `imdb_id` removes `series`, `tvdb_id`, `season`, `episode`, `title` and `year`
-        * `tvdb_id` removes `series` and `year`
-        * `title` removes `season` and `episode`
-
-
-    :param video: the video to get the score with.
-    :type video: :class:`~subliminal.video.Video`
-    :param dict scores: scores to use, if `None`, the :attr:`~subliminal.video.Video.scores` from the video are used.
-    :return: score of the subtitle.
-    :rtype: int
-
-    """
-    final_matches = matches.copy()
-    scores = scores or video.scores
-
-    logger.info('Computing score for matches %r and %r', matches, video)
-
-    # remove equivalent match combinations
-    if 'hash' in final_matches:
-        final_matches &= {'hash', 'hearing_impaired'}
-    elif isinstance(video, Episode):
-        if 'imdb_id' in final_matches:
-            final_matches -= {'series', 'tvdb_id', 'season', 'episode', 'title', 'year'}
-        if 'tvdb_id' in final_matches:
-            final_matches -= {'series', 'year'}
-        if 'title' in final_matches:
-            final_matches -= {'season', 'episode'}
-
-    # compute score
-    logger.debug('Final matches: %r', final_matches)
-    score = sum((scores[match] for match in final_matches))
-    logger.info('Computed score %d', score)
-
-    # ensure score is capped by the best possible score (hash + preferences)
-    assert score <= scores['hash'] + scores['hearing_impaired']
-
-    return score
 
 
 def get_subtitle_path(video_path, language=None, extension='.srt'):
@@ -234,30 +178,6 @@ def get_subtitle_path(video_path, language=None, extension='.srt'):
     return subtitle_root + extension
 
 
-def sanitize_string(string, replacement=''):
-    """Replace any special characters from a string.
-
-    :param str string: the string to sanitize.
-    :param str replacement: the replacement for special characters.
-    :return: the sanitized string.
-    :rtype: str
-
-    """
-    return re.sub('[^ a-zA-Z0-9]', replacement, string)
-
-
-def sanitized_string_equal(string1, string2):
-    """Test two strings for equality case insensitively and ignoring special characters.
-
-    :param str string1: the first string to compare.
-    :param str string2: the second string to compare.
-    :return: `True` if the two strings are equal, `False` otherwise.
-    :rtype: bool
-
-    """
-    return string1 and string2 and sanitize_string(string1).lower() == sanitize_string(string2).lower()
-
-
 def guess_matches(video, guess, partial=False):
     """Get matches between a `video` and a `guess`.
 
@@ -275,10 +195,10 @@ def guess_matches(video, guess, partial=False):
     matches = set()
     if isinstance(video, Episode):
         # series
-        if video.series and 'title' in guess and sanitized_string_equal(guess['title'], video.series):
+        if video.series and 'title' in guess and sanitize(guess['title']) == sanitize(video.series):
             matches.add('series')
-        # series
-        if video.title and 'episode_title' in guess and sanitized_string_equal(guess['episode_title'], video.title):
+        # title
+        if video.title and 'episode_title' in guess and sanitize(guess['episode_title']) == sanitize(video.title):
             matches.add('title')
         # season
         if video.season and 'season' in guess and guess['season'] == video.season:
@@ -290,18 +210,18 @@ def guess_matches(video, guess, partial=False):
         if video.year and 'year' in guess and guess['year'] == video.year:
             matches.add('year')
         # count "no year" as an information
-        if not partial and video.year is None and 'year' not in guess:
+        if not partial and video.original_series and 'year' not in guess:
             matches.add('year')
     elif isinstance(video, Movie):
         # year
         if video.year and 'year' in guess and guess['year'] == video.year:
             matches.add('year')
         # title
-        if video.title and 'title' in guess and sanitized_string_equal(guess['title'], video.title):
+        if video.title and 'title' in guess and sanitize(guess['title']) == sanitize(video.title):
             matches.add('title')
     # release_group
     if video.release_group and 'release_group' in guess \
-            and guess['release_group'].lower() == video.release_group.lower():
+            and sanitize_release_group(guess['release_group']) == sanitize_release_group(video.release_group):
         matches.add('release_group')
     # resolution
     if video.resolution and 'screen_size' in guess and guess['screen_size'] == video.resolution:
@@ -317,18 +237,6 @@ def guess_matches(video, guess, partial=False):
         matches.add('audio_codec')
 
     return matches
-
-
-def guess_properties(string):
-    """Extract properties from `string` using guessit.
-
-    :param str string: the string potentially containing properties.
-    :return: the guessed properties.
-    :rtype: dict
-
-    """
-    properties = guessit(string)
-    return properties
 
 
 def fix_line_ending(content):

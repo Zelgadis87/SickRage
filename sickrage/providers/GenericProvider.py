@@ -111,7 +111,8 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
 
         return [Proper(x['name'], x['url'], datetime.fromtimestamp(x['time']), self.show) for x in results]
 
-    def find_search_results(self, show, episodes, search_mode, manual_search=False, download_current_quality=False):  # pylint: disable=too-many-branches,too-many-arguments,too-many-locals,too-many-statements
+    def find_search_results(self, show, episodes, search_mode,  # pylint: disable=too-many-branches,too-many-arguments,too-many-locals,too-many-statements
+                            manual_search=False, download_current_quality=False):
         self._check_auth()
         self.show = show
 
@@ -122,7 +123,6 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
         for episode in episodes:
             cache_result = self.cache.searchCache(episode, manualSearch=manual_search,
                                                   downCurQuality=download_current_quality)
-
             if cache_result:
                 if episode.episode not in results:
                     results[episode.episode] = cache_result
@@ -186,13 +186,9 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
             (title, url) = self._get_title_and_url(item)
 
             try:
-                parser = NameParser(parse_method=('normal', 'anime')[show.is_anime])
-                parse_result = parser.parse(title)
-            except InvalidNameException:
-                logger.log(u'Unable to parse the filename %s into a valid episode' % title, logger.DEBUG)
-                continue
-            except InvalidShowException:
-                logger.log(u'Unable to parse the filename %s into a valid show' % title, logger.DEBUG)
+                parse_result = NameParser(parse_method=('normal', 'anime')[show.is_anime]).parse(title)
+            except (InvalidNameException, InvalidShowException) as error:
+                logger.log(u"{}".format(error), logger.DEBUG)
                 continue
 
             show_object = parse_result.show
@@ -203,32 +199,30 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
 
             if not (show_object.air_by_date or show_object.sports):
                 if search_mode == 'sponly':
-                    if len(parse_result.episode_numbers):
+                    if parse_result.episode_numbers:
                         logger.log(
                             u'This is supposed to be a season pack search but the result %s is not a valid season pack, skipping it' % title,
                             logger.DEBUG
                         )
                         add_cache_entry = True
+                    elif not [ep for ep in episodes if parse_result.season_number == (ep.season, ep.scene_season)[ep.show.is_scene]]:
+                        logger.log(
+                            u'This season result %s is for a season we are not searching for, skipping it' % title,
+                            logger.DEBUG
+                        )
+                        add_cache_entry = True
 
-                    if len(parse_result.episode_numbers) and (
-                            parse_result.season_number not in set([ep.season for ep in episodes]) or
-                            not [ep for ep in episodes if ep.scene_episode in parse_result.episode_numbers]):
-                        logger.log(
-                            u'The result %s doesn\'t seem to be a valid episode that we are trying to snatch, ignoring' % title,
-                            logger.DEBUG)
-                        add_cache_entry = True
                 else:
-                    if not len(parse_result.episode_numbers) and parse_result.season_number and not [ep for ep in
-                                                                                                     episodes if
-                                                                                                     ep.season == parse_result.season_number and ep.episode in parse_result.episode_numbers]:
+                    if not all([
+                        # pylint: disable=bad-continuation
+                        parse_result.season_number is not None,
+                        parse_result.episode_numbers,
+                        [ep for ep in episodes if (ep.season, ep.scene_season)[ep.show.is_scene] ==
+                         parse_result.season_number and (ep.episode, ep.scene_episode)[ep.show.is_scene] in parse_result.episode_numbers]
+                    ]):
+
                         logger.log(
-                            u'The result %s doesn\'t seem to be a valid season that we are trying to snatch, ignoring' % title,
-                            logger.DEBUG)
-                        add_cache_entry = True
-                    elif len(parse_result.episode_numbers) and not [ep for ep in episodes if
-                                                                    ep.season == parse_result.season_number and ep.episode in parse_result.episode_numbers]:
-                        logger.log(
-                            u'The result %s doesn\'t seem to be a valid episode that we are trying to snatch, ignoring' % title,
+                            u'The result %s doesn\'t seem to match an episode that we are currently trying to snatch, skipping it' % title,
                             logger.DEBUG)
                         add_cache_entry = True
 
@@ -338,7 +332,7 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
 
     def get_quality(self, item, anime=False):
         (title, _) = self._get_title_and_url(item)
-        quality = Quality.sceneQuality(title, anime)
+        quality = Quality.scene_quality(title, anime)
 
         return quality
 
@@ -348,9 +342,18 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
 
         return result
 
-    def get_url(self, url, post_data=None, params=None, timeout=30, json=False, need_bytes=False):  # pylint: disable=too-many-arguments,
-        return getURL(url, post_data=post_data, params=params, headers=self.headers, timeout=timeout,
-                      session=self.session, json=json, need_bytes=need_bytes)
+    @staticmethod
+    def get_url_hook(response, **kwargs):
+        _ = kwargs
+        logger.log(u'{} URL: {} [Status: {}]'.format
+                   (response.request.method, response.request.url, response.status_code), logger.DEBUG)
+
+        if response.request.method == 'POST':
+            logger.log(u'With post data: {}'.format(response.request.body), logger.DEBUG)
+
+    def get_url(self, url, post_data=None, params=None, timeout=30, json=False, need_bytes=False, **kwargs):  # pylint: disable=too-many-arguments,
+        kwargs['hooks'] = {'response': self.get_url_hook}
+        return getURL(url, post_data, params, self.headers, timeout, self.session, json, need_bytes, **kwargs)
 
     def image_name(self):
         return self.get_id() + '.png'
@@ -394,7 +397,7 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
             'Episode': []
         }
 
-        for show_name in set(allPossibleShowNames(episode.show)):
+        for show_name in allPossibleShowNames(episode.show, season=episode.scene_season):
             episode_string = show_name + ' '
 
             if episode.show.air_by_date:
@@ -423,7 +426,7 @@ class GenericProvider(object):  # pylint: disable=too-many-instance-attributes
             'Season': []
         }
 
-        for show_name in set(allPossibleShowNames(self.show)):
+        for show_name in allPossibleShowNames(episode.show, season=episode.scene_season):
             episode_string = show_name + ' '
 
             if episode.show.air_by_date or episode.show.sports:
