@@ -771,7 +771,9 @@ class TraktChecker(object):
 
         logger.log(u"Updating show next episode data: {show}".format(show=show.name))
 
+        update_datetime = int(time.time())
         myDB = db.DBConnection()
+
         sqlResults = myDB.select("SELECT season, episode FROM v_episodes_to_watch where indexer = ? and indexer_id = ? order by season asc, episode asc limit 1", [show.indexer, show.indexerid]);
         if len(sqlResults) == 1:
             nextSeason = sqlResults[0]["season"];
