@@ -236,7 +236,7 @@ class TraktChecker():
                         trakt_data.append((cur_episode["showid"],cur_episode["indexer"],cur_episode["show_name"],cur_episode["startyear"],cur_episode["season"], cur_episode["episode"]))
 
                 if len(trakt_data):
-                    
+
                     try:
                         data = self.trakt_bulk_data_generate(trakt_data)
                         self.trakt_api.traktRequest("sync/collection", data, method='POST')
@@ -279,7 +279,7 @@ class TraktChecker():
                             trakt_data.append((cur_episode["showid"],cur_episode["indexer"],cur_episode["show_name"],cur_episode["startyear"],cur_episode["season"], cur_episode["episode"]))
 
             if len(trakt_data):
-                
+
                 try:
                     data = self.trakt_bulk_data_generate(trakt_data)
                     self.trakt_api.traktRequest("sync/watchlist/remove", data, method='POST')
@@ -335,7 +335,7 @@ class TraktChecker():
                         trakt_data.append(show_el)
 
                 if len(trakt_data):
-                    
+
                     try:
                         data = {'shows': trakt_data}
                         self.trakt_api.traktRequest("sync/watchlist", data, method='POST')
@@ -743,7 +743,9 @@ class TraktChecker():
 
         logger.log(u"Updating show next episode data: {show}".format(show=show.name))
 
+        update_datetime = int(time.time())
         myDB = db.DBConnection()
+
         sqlResults = myDB.select("SELECT season, episode FROM v_episodes_to_watch where indexer = ? and indexer_id = ? order by season asc, episode asc limit 1", [show.indexer, show.indexerid]);
         if len(sqlResults) == 1:
             nextSeason = sqlResults[0]["season"];
