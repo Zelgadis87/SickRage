@@ -63,11 +63,10 @@ import traceback
 codecs.register(lambda name: codecs.lookup('utf-8') if name == 'cp65001' else None)
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), 'lib')))
 
-if sys.version_info < (2, 7):
-    print('Sorry, requires Python 2.7.x')
+if (2, 7, 99) < sys.version_info < (2, 7):
+    print('Sorry, requires Python 2.7')
     sys.exit(1)
 
-# pylint: disable=wrong-import-position
 # https://mail.python.org/pipermail/python-dev/2014-September/136300.html
 if sys.version_info >= (2, 7, 9):
     import ssl
@@ -75,6 +74,16 @@ if sys.version_info >= (2, 7, 9):
 
 import shutil_custom  # pylint: disable=import-error
 shutil.copyfile = shutil_custom.copyfile_custom
+
+# Fix mimetypes on misconfigured systems
+import mimetypes
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/sfont", ".otf")
+mimetypes.add_type("application/sfont", ".ttf")
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/font-woff", ".woff")
+# Not sure about this one, but we also have halflings in .woff so I think it wont matter
+# mimetypes.add_type("application/font-woff2", ".woff2")
 
 # Do this before importing sickbeard, to prevent locked files and incorrect import
 OLD_TORNADO = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tornado'))
@@ -135,7 +144,7 @@ class SickRage(object):
             if os.path.isdir(cache_folder):
                 shutil.rmtree(cache_folder)
         except Exception:  # pylint: disable=broad-except
-            logger.log('Unable to remove the cache/mako directory!', logger.WARNING)  # pylint: disable=no-member
+            logger.log('Unable to remove the cache/mako directory!', logger.WARNING)
 
     @staticmethod
     def help_message():
@@ -215,7 +224,7 @@ class SickRage(object):
                 try:
                     self.forced_port = int(value)
                 except ValueError:
-                    sys.exit('Port: %s is not a number. Exiting.' % value)
+                    sys.exit('Port: {0!s} is not a number. Exiting.'.format(value))
 
             # Run as a double forked daemon
             if option in ('-d', '--daemon'):
@@ -234,7 +243,7 @@ class SickRage(object):
 
                 # If the pid file already exists, SickRage may still be running, so exit
                 if ek(os.path.exists, self.pid_file):
-                    sys.exit('PID file: %s already exists. Exiting.' % self.pid_file)
+                    sys.exit('PID file: {0!s} already exists. Exiting.'.format(self.pid_file))
 
             # Specify folder to load the config file from
             if option in ('--config',):
@@ -257,9 +266,9 @@ class SickRage(object):
             if self.run_as_daemon:
                 pid_dir = ek(os.path.dirname, self.pid_file)
                 if not ek(os.access, pid_dir, os.F_OK):
-                    sys.exit('PID dir: %s doesn\'t exist. Exiting.' % pid_dir)
+                    sys.exit('PID dir: {0!s} doesn\'t exist. Exiting.'.format(pid_dir))
                 if not ek(os.access, pid_dir, os.W_OK):
-                    sys.exit('PID dir: %s must be writable (write permissions). Exiting.' % pid_dir)
+                    sys.exit('PID dir: {0!s} must be writable (write permissions). Exiting.'.format(pid_dir))
 
             else:
                 if self.console_logging:
@@ -276,18 +285,18 @@ class SickRage(object):
             try:
                 ek(os.makedirs, sickbeard.DATA_DIR, 0o744)
             except os.error:
-                raise SystemExit('Unable to create data directory: %s' % sickbeard.DATA_DIR)
+                raise SystemExit('Unable to create data directory: {0!s}'.format(sickbeard.DATA_DIR))
 
         # Make sure we can write to the data dir
         if not ek(os.access, sickbeard.DATA_DIR, os.W_OK):
-            raise SystemExit('Data directory must be writeable: %s' % sickbeard.DATA_DIR)
+            raise SystemExit('Data directory must be writeable: {0!s}'.format(sickbeard.DATA_DIR))
 
         # Make sure we can write to the config file
         if not ek(os.access, sickbeard.CONFIG_FILE, os.W_OK):
             if ek(os.path.isfile, sickbeard.CONFIG_FILE):
-                raise SystemExit('Config file must be writeable: %s' % sickbeard.CONFIG_FILE)
+                raise SystemExit('Config file must be writeable: {0!s}'.format(sickbeard.CONFIG_FILE))
             elif not ek(os.access, ek(os.path.dirname, sickbeard.CONFIG_FILE), os.W_OK):
-                raise SystemExit('Config file root dir must be writeable: %s' % ek(os.path.dirname, sickbeard.CONFIG_FILE))
+                raise SystemExit('Config file root dir must be writeable: {0!s}'.format(ek(os.path.dirname, sickbeard.CONFIG_FILE)))
 
         ek(os.chdir, sickbeard.DATA_DIR)
 
@@ -296,11 +305,11 @@ class SickRage(object):
         if ek(os.path.exists, restore_dir):
             success = self.restore_db(restore_dir, sickbeard.DATA_DIR)
             if self.console_logging:
-                sys.stdout.write('Restore: restoring DB and config.ini %s!\n' % ('FAILED', 'SUCCESSFUL')[success])
+                sys.stdout.write('Restore: restoring DB and config.ini {0!s}!\n'.format(('FAILED', 'SUCCESSFUL')[success]))
 
         # Load the config and publish it to the sickbeard package
         if self.console_logging and not ek(os.path.isfile, sickbeard.CONFIG_FILE):
-            sys.stdout.write('Unable to find %s, all settings will be default!\n' % sickbeard.CONFIG_FILE)
+            sys.stdout.write('Unable to find {0!s}, all settings will be default!\n'.format(sickbeard.CONFIG_FILE))
 
         sickbeard.CFG = ConfigObj(sickbeard.CONFIG_FILE)
 
@@ -386,7 +395,7 @@ class SickRage(object):
         """
         Fork off as a daemon
         """
-        # pylint: disable=no-member,protected-access
+        # pylint: disable=protected-access
         # An object is accessed for a non-existent member.
         # Access to a protected member of a client class
         # Make a non-session-leader child process
@@ -401,7 +410,7 @@ class SickRage(object):
 
         os.setsid()  # @UndefinedVariable - only available in UNIX
 
-        # https://github.com/SickRage/sickrage-issues/issues/2969
+        # https://github.com/SickRage/SickRage/issues/2969
         # http://www.microhowto.info/howto/cause_a_process_to_become_a_daemon_in_c.html#idp23920
         # https://www.safaribooksonline.com/library/view/python-cookbook/0596001673/ch06s08.html
         # Previous code simply set the umask to whatever it was because it was ANDing instead of OR-ing
@@ -425,7 +434,7 @@ class SickRage(object):
 
             try:
                 with io.open(self.pid_file, 'w') as f_pid:
-                    f_pid.write('%s\n' % pid)
+                    f_pid.write('{0!s}\n'.format(pid))
             except EnvironmentError as error:
                 logger.log_error_and_exit('Unable to write PID file: {filename} Error {error_num}: {error_message}'.format
                                           (filename=self.pid_file, error_num=error.errno, error_message=error.strerror))
@@ -464,7 +473,7 @@ class SickRage(object):
         """
         Populates the showList with shows from the database
         """
-        logger.log('Loading initial show list', logger.DEBUG)  # pylint: disable=no-member
+        logger.log('Loading initial show list', logger.DEBUG)
 
         main_db_con = db.DBConnection()
         sql_results = main_db_con.select('SELECT indexer, indexer_id, location FROM tv_shows;')
@@ -476,9 +485,9 @@ class SickRage(object):
                 cur_show.nextEpisode()
                 sickbeard.showList.append(cur_show)
             except Exception as error:  # pylint: disable=broad-except
-                logger.log('There was an error creating the show in {location}: Error {error_num}: {error_message}'.format  # pylint: disable=no-member
-                           (location=sql_show[b'location'], error_num=error.errorno, error_message=error.strerror), logger.ERROR)
-                logger.log(traceback.format_exc(), logger.DEBUG)  # pylint: disable=no-member
+                logger.log('There was an error creating the show in {0}: Error {1}'.format
+                           (sql_show[b'location'], error), logger.ERROR)
+                logger.log(traceback.format_exc(), logger.DEBUG)
 
     @staticmethod
     def restore_db(src_dir, dst_dir):
@@ -495,7 +504,7 @@ class SickRage(object):
             for filename in files_list:
                 src_file = ek(os.path.join, src_dir, filename)
                 dst_file = ek(os.path.join, dst_dir, filename)
-                bak_file = ek(os.path.join, dst_dir, '%s.bak-%s' % (filename, datetime.datetime.now().strftime('%Y%m%d_%H%M%S')))
+                bak_file = ek(os.path.join, dst_dir, '{0!s}.bak-{1!s}'.format(filename, datetime.datetime.now().strftime('%Y%m%d_%H%M%S')))
                 if ek(os.path.isfile, dst_file):
                     shutil.move(dst_file, bak_file)
                 shutil.move(src_file, dst_file)
@@ -515,7 +524,7 @@ class SickRage(object):
 
             # shutdown web server
             if self.web_server:
-                logger.log('Shutting down Tornado')  # pylint: disable=no-member
+                logger.log('Shutting down Tornado')
                 self.web_server.shutDown()
 
                 try:
@@ -537,20 +546,20 @@ class SickRage(object):
                 if install_type in ('git', 'source'):
                     popen_list = [sys.executable, sickbeard.MY_FULLNAME]
                 elif install_type == 'win':
-                    logger.log('You are using a binary Windows build of SickRage. '  # pylint: disable=no-member
+                    logger.log('You are using a binary Windows build of SickRage. '
                                'Please switch to using git.', logger.ERROR)
 
                 if popen_list and not sickbeard.NO_RESTART:
                     popen_list += sickbeard.MY_ARGS
                     if '--nolaunch' not in popen_list:
                         popen_list += ['--nolaunch']
-                    logger.log('Restarting SickRage with {options}'.format(options=popen_list))  # pylint: disable=no-member
+                    logger.log('Restarting SickRage with {options}'.format(options=popen_list))
                     # shutdown the logger to make sure it's released the logfile BEFORE it restarts SR.
-                    logger.shutdown()  # pylint: disable=no-member
+                    logger.shutdown()
                     subprocess.Popen(popen_list, cwd=os.getcwd())
 
         # Make sure the logger has stopped, just in case
-        logger.shutdown()  # pylint: disable=no-member
+        logger.shutdown()
         os._exit(0)  # pylint: disable=protected-access
 
 

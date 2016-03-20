@@ -1,115 +1,29 @@
 # -*- coding: utf-8 -*-
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 import io
 import itertools
 import logging
 import operator
 import os.path
-from pkg_resources import EntryPoint
 import socket
 
 from babelfish import Language
+from guessit import guessit
+from rarfile import NotRarFile, RarFile
 import requests
-from stevedore import ExtensionManager
 
+from .extensions import provider_manager, refiner_manager
 from .score import compute_score as default_compute_score
-from .subtitle import get_subtitle_path
+from .subtitle import SUBTITLE_EXTENSIONS, get_subtitle_path
+from .utils import hash_napiprojekt, hash_opensubtitles, hash_thesubdb
+from .video import VIDEO_EXTENSIONS, Episode, Movie, Video
+
+#: Supported archive extensions
+ARCHIVE_EXTENSIONS = ('.rar',)
 
 logger = logging.getLogger(__name__)
-
-
-class RegistrableExtensionManager(ExtensionManager):
-    """:class:~stevedore.extensions.ExtensionManager` with support for registration.
-
-    It allows loading of internal extensions without setup and registering/unregistering additional extensions.
-
-    Loading is done in this order:
-
-    * Entry point extensions
-    * Internal extensions
-    * Registered extensions
-
-    """
-    def __init__(self, namespace, internal_extensions):
-        #: Registered extensions with entry point syntax
-        self.registered_extensions = []
-
-        #: Internal extensions with entry point syntax
-        self.internal_extensions = internal_extensions
-
-        super(RegistrableExtensionManager, self).__init__(namespace)
-
-    def _find_entry_points(self, namespace):
-        # default extensions
-        eps = super(RegistrableExtensionManager, self)._find_entry_points(namespace)
-
-        # internal extensions
-        for iep in self.internal_extensions:
-            ep = EntryPoint.parse(iep)
-            if ep.name not in [e.name for e in eps]:
-                eps.append(ep)
-
-        # registered extensions
-        for rep in self.registered_extensions:
-            ep = EntryPoint.parse(rep)
-            if ep.name not in [e.name for e in eps]:
-                eps.append(ep)
-
-        return eps
-
-    def register(self, entry_point):
-        """Register an extension
-
-        :param str entry_point: extension to register (entry point syntax)
-        :raise: ValueError if already registered
-
-        """
-        if entry_point in self.registered_extensions:
-            raise ValueError('Extension already registered')
-
-        ep = EntryPoint.parse(entry_point)
-        if ep.name in self.names():
-            raise ValueError('An extension with the same name already exist')
-
-        ext = self._load_one_plugin(ep, False, (), {}, False)
-        self.extensions.append(ext)
-        if self._extensions_by_name is not None:
-            self._extensions_by_name[ext.name] = ext
-        self.registered_extensions.insert(0, entry_point)
-
-    def unregister(self, entry_point):
-        """Unregister a provider
-
-        :param str entry_point: provider to unregister (entry point syntax)
-
-        """
-        if entry_point not in self.registered_extensions:
-            raise ValueError('Extension not registered')
-
-        ep = EntryPoint.parse(entry_point)
-        self.registered_extensions.remove(entry_point)
-        if self._extensions_by_name is not None:
-            del self._extensions_by_name[ep.name]
-        for i, ext in enumerate(self.extensions):
-            if ext.name == ep.name:
-                del self.extensions[i]
-                break
-
-
-provider_manager = RegistrableExtensionManager('subliminal.providers', [
-    'addic7ed = subliminal.providers.addic7ed:Addic7edProvider',
-    'opensubtitles = subliminal.providers.opensubtitles:OpenSubtitlesProvider',
-    'podnapisi = subliminal.providers.podnapisi:PodnapisiProvider',
-    'subscenter = subliminal.providers.subscenter:SubsCenterProvider',
-    'thesubdb = subliminal.providers.thesubdb:TheSubDBProvider',
-    'tvsubtitles = subliminal.providers.tvsubtitles:TVsubtitlesProvider'
-])
-
-refiner_manager = RegistrableExtensionManager('subliminal.refiners', [
-    'tvdb = subliminal.refiners.tvdb:refine',
-    'omdb = subliminal.refiners.omdb:refine'
-])
 
 
 class ProviderPool(object):
@@ -284,7 +198,7 @@ class ProviderPool(object):
         :param int min_score: minimum score for a subtitle to be downloaded.
         :param bool hearing_impaired: hearing impaired preference.
         :param bool only_one: download only one subtitle, not one per language.
-        :param function compute_score: function that takes `subtitle` and `video` as positional arguments,
+        :param compute_score: function that takes `subtitle` and `video` as positional arguments,
             `hearing_impaired` as keyword argument and returns the score.
         :return: downloaded subtitles.
         :rtype: list of :class:`~subliminal.subtitle.Subtitle`
@@ -310,7 +224,6 @@ class ProviderPool(object):
                 continue
 
             # download
-            logger.info('Downloading subtitle %r with score %d', subtitle, score)
             if self.download_subtitle(subtitle):
                 downloaded_subtitles.append(subtitle)
 
@@ -405,6 +318,231 @@ def check_video(video, languages=None, age=None, undefined=False):
     return True
 
 
+def search_external_subtitles(path, directory=None):
+    """Search for external subtitles from a video `path` and their associated language.
+
+    Unless `directory` is provided, search will be made in the same directory as the video file.
+
+    :param str path: path to the video.
+    :param str directory: directory to search for subtitles.
+    :return: found subtitles with their languages.
+    :rtype: dict
+
+    """
+    # split path
+    dirpath, filename = os.path.split(path)
+    dirpath = dirpath or '.'
+    fileroot, fileext = os.path.splitext(filename)
+
+    # search for subtitles
+    subtitles = {}
+    for p in os.listdir(directory or dirpath):
+        # keep only valid subtitle filenames
+        if not p.startswith(fileroot) or not p.endswith(SUBTITLE_EXTENSIONS):
+            continue
+
+        # extract the potential language code
+        language = Language('und')
+        language_code = p[len(fileroot):-len(os.path.splitext(p)[1])].replace(fileext, '').replace('_', '-')[1:]
+        if language_code:
+            try:
+                language = Language.fromietf(language_code)
+            except ValueError:
+                logger.error('Cannot parse language code %r', language_code)
+
+        subtitles[p] = language
+
+    logger.debug('Found subtitles %r', subtitles)
+
+    return subtitles
+
+
+def scan_video(path):
+    """Scan a video from a `path`.
+
+    :param str path: existing path to the video.
+    :return: the scanned video.
+    :rtype: :class:`~subliminal.video.Video`
+
+    """
+    # check for non-existing path
+    if not os.path.exists(path):
+        raise ValueError('Path does not exist')
+
+    # check video extension
+    if not path.endswith(VIDEO_EXTENSIONS):
+        raise ValueError('%r is not a valid video extension' % os.path.splitext(path)[1])
+
+    dirpath, filename = os.path.split(path)
+    logger.info('Scanning video %r in %r', filename, dirpath)
+
+    # guess
+    video = Video.fromguess(path, guessit(path))
+
+    # size and hashes
+    video.size = os.path.getsize(path)
+    if video.size > 10485760:
+        logger.debug('Size is %d', video.size)
+        video.hashes['opensubtitles'] = hash_opensubtitles(path)
+        video.hashes['thesubdb'] = hash_thesubdb(path)
+        video.hashes['napiprojekt'] = hash_napiprojekt(path)
+        logger.debug('Computed hashes %r', video.hashes)
+    else:
+        logger.warning('Size is lower than 10MB: hashes not computed')
+
+    return video
+
+
+def scan_archive(path):
+    """Scan an archive from a `path`.
+
+    :param str path: existing path to the archive.
+    :return: the scanned video.
+    :rtype: :class:`~subliminal.video.Video`
+
+    """
+    # check for non-existing path
+    if not os.path.exists(path):
+        raise ValueError('Path does not exist')
+
+    # check video extension
+    if not path.endswith(ARCHIVE_EXTENSIONS):
+        raise ValueError('%r is not a valid archive extension' % os.path.splitext(path)[1])
+
+    dirpath, filename = os.path.split(path)
+    logger.info('Scanning archive %r in %r', filename, dirpath)
+
+    # rar extension
+    if filename.endswith('.rar'):
+        rar = RarFile(path)
+
+        # filter on video extensions
+        rar_filenames = [f for f in rar.namelist() if f.endswith(VIDEO_EXTENSIONS)]
+
+        # no video found
+        if not rar_filenames:
+            raise ValueError('No video in archive')
+
+        # more than one video found
+        if len(rar_filenames) > 1:
+            raise ValueError('More than one video in archive')
+
+        # guess
+        rar_filename = rar_filenames[0]
+        rar_filepath = os.path.join(dirpath, rar_filename)
+        video = Video.fromguess(rar_filepath, guessit(rar_filepath))
+
+        # size
+        video.size = rar.getinfo(rar_filename).file_size
+    else:
+        raise ValueError('Unsupported extension %r' % os.path.splitext(path)[1])
+
+    return video
+
+
+def scan_videos(path, age=None, archives=True, **kwargs):
+    """Scan `path` for videos and their subtitles.
+
+    See :func:`refine` to find additional information for the video.
+
+    :param str path: existing directory path to scan.
+    :param datetime.timedelta age: maximum age of the video or archive.
+    :param bool archives: scan videos in archives.
+    :return: the scanned videos.
+    :rtype: list of :class:`~subliminal.video.Video`
+
+    """
+    # check for non-existing path
+    if not os.path.exists(path):
+        raise ValueError('Path does not exist')
+
+    # check for non-directory path
+    if not os.path.isdir(path):
+        raise ValueError('Path is not a directory')
+
+    # walk the path
+    videos = []
+    for dirpath, dirnames, filenames in os.walk(path):
+        logger.debug('Walking directory %r', dirpath)
+
+        # remove badly encoded and hidden dirnames
+        for dirname in list(dirnames):
+            if dirname.startswith('.'):
+                logger.debug('Skipping hidden dirname %r in %r', dirname, dirpath)
+                dirnames.remove(dirname)
+
+        # scan for videos
+        for filename in filenames:
+            # filter on videos and archives
+            if not (filename.endswith(VIDEO_EXTENSIONS) or archives and filename.endswith(ARCHIVE_EXTENSIONS)):
+                continue
+
+            # skip hidden files
+            if filename.startswith('.'):
+                logger.debug('Skipping hidden filename %r in %r', filename, dirpath)
+                continue
+
+            # reconstruct the file path
+            filepath = os.path.join(dirpath, filename)
+
+            # skip links
+            if os.path.islink(filepath):
+                logger.debug('Skipping link %r in %r', filename, dirpath)
+                continue
+
+            # skip old files
+            if age and datetime.utcnow() - datetime.utcfromtimestamp(os.path.getmtime(filepath)) > age:
+                logger.debug('Skipping old file %r in %r', filename, dirpath)
+                continue
+
+            # scan
+            if filename.endswith(VIDEO_EXTENSIONS):  # video
+                try:
+                    video = scan_video(filepath)
+                except ValueError:  # pragma: no cover
+                    logger.exception('Error scanning video')
+                    continue
+            elif archives and filename.endswith(ARCHIVE_EXTENSIONS):  # archive
+                try:
+                    video = scan_archive(filepath)
+                except (NotRarFile, ValueError):  # pragma: no cover
+                    logger.exception('Error scanning archive')
+                    continue
+            else:  # pragma: no cover
+                raise ValueError('Unsupported file %r' % filename)
+
+            videos.append(video)
+
+    return videos
+
+
+def refine(video, episode_refiners=('metadata', 'tvdb', 'omdb'), movie_refiners=('metadata', 'omdb'), **kwargs):
+    """Refine a video using :ref:`refiners`.
+
+    .. note::
+
+        Exceptions raised in refiners are silently passed and logged.
+
+    :param video: the video to refine.
+    :type video: :class:`~subliminal.video.Video`
+    :param tuple episode_refiners: refiners to use for episodes.
+    :param tuple movie_refiners: refiners to use for movies.
+    :param \*\*kwargs: parameters for refiners.
+
+    """
+    refiners = ()
+    if isinstance(video, Episode):
+        refiners = episode_refiners or ()
+    elif isinstance(video, Movie):
+        refiners = movie_refiners or ()
+    for refiner in refiners:
+        logger.info('Refining video with %s', refiner)
+        try:
+            refiner_manager[refiner].plugin(video, **kwargs)
+        except:
+            logger.exception('Failed to refine video')
+
+
 def list_subtitles(videos, languages, pool_class=ProviderPool, **kwargs):
     """List subtitles.
 
@@ -479,7 +617,7 @@ def download_best_subtitles(videos, languages, min_score=0, hearing_impaired=Fal
     :param int min_score: minimum score for a subtitle to be downloaded.
     :param bool hearing_impaired: hearing impaired preference.
     :param bool only_one: download only one subtitle, not one per language.
-    :param function compute_score: function that takes `subtitle` and `video` as positional arguments,
+    :param compute_score: function that takes `subtitle` and `video` as positional arguments,
         `hearing_impaired` as keyword argument and returns the score.
     :param pool_class: class to use as provider pool.
     :type: :class:`ProviderPool`, :class:`AsyncProviderPool` or similar

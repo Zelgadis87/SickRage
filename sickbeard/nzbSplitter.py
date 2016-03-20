@@ -20,7 +20,6 @@
 
 # pylint: disable=line-too-long
 
-import requests  # pylint: disable=import-error
 import re
 
 try:
@@ -150,7 +149,7 @@ def split_result(obj):
     :param obj: to search for results
     :return: a list of episode objects or an empty list
     """
-    url_data = helpers.getURL(obj.url, session=requests.Session(), returns='content')
+    url_data = helpers.getURL(obj.url, session=helpers.make_session(), returns='content')
     if url_data is None:
         logger.log(u"Unable to load url " + obj.url + ", can't download season NZB", logger.ERROR)
         return []
@@ -159,7 +158,7 @@ def split_result(obj):
     try:
         parsed_obj = NameParser(False, showObj=obj.show).parse(obj.name)
     except (InvalidNameException, InvalidShowException) as error:
-        logger.log(u"{}".format(error), logger.DEBUG)
+        logger.log(u"{0}".format(error), logger.DEBUG)
         return []
 
     # bust it up
@@ -180,7 +179,7 @@ def split_result(obj):
         try:
             parsed_obj = NameParser(False, showObj=obj.show).parse(new_nzb)
         except (InvalidNameException, InvalidShowException) as error:
-            logger.log(u"{}".format(error), logger.DEBUG)
+            logger.log(u"{0}".format(error), logger.DEBUG)
             return []
 
         # make sure the result is sane
@@ -189,7 +188,7 @@ def split_result(obj):
             logger.log(u"Found " + new_nzb + " inside " + obj.name + " but it doesn't seem to belong to the same season, ignoring it",
                        logger.WARNING)
             continue
-        elif len(parsed_obj.episode_numbers) == 0:
+        elif not parsed_obj.episode_numbers:
             # pylint: disable=no-member
             logger.log(u"Found " + new_nzb + " inside " + obj.name + " but it doesn't seem to be a valid episode NZB, ignoring it",
                        logger.WARNING)

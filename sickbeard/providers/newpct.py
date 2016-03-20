@@ -69,7 +69,7 @@ class newpctProvider(TorrentProvider):
 
         for mode in search_strings:
             items = []
-            logger.log('Search Mode: {}'.format(mode), logger.DEBUG)
+            logger.log('Search Mode: {0}'.format(mode), logger.DEBUG)
 
             # Only search if user conditions are true
             if self.onlyspasearch and lang_info != 'es' and mode != 'RSS':
@@ -80,12 +80,12 @@ class newpctProvider(TorrentProvider):
 
             for search_string in search_strings[mode]:
                 if mode != 'RSS':
-                    logger.log('Search string: {}'.format(search_string.decode('utf-8')),
+                    logger.log('Search string: {0}'.format(search_string.decode('utf-8')),
                                logger.DEBUG)
 
                 search_params['q'] = search_string
 
-                data = self.get_url(self.urls['search'], params=search_params, timeout=30, returns='text')
+                data = self.get_url(self.urls['search'], params=search_params, returns='text')
                 if not data:
                     continue
 
@@ -117,9 +117,9 @@ class newpctProvider(TorrentProvider):
                             torrent_size = cells[labels.index('Tamaño')].get_text(strip=True)
 
                             size = convert_size(torrent_size) or -1
-                            item = title, download_url, size, seeders, leechers
+                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                             if mode != 'RSS':
-                                logger.log('Found result: {}'.format(title), logger.DEBUG)
+                                logger.log('Found result: {0}'.format(title), logger.DEBUG)
 
                             items.append(item)
                         except (AttributeError, TypeError):
@@ -129,17 +129,21 @@ class newpctProvider(TorrentProvider):
 
         return results
 
-    def get_url(self, url, post_data=None, params=None, timeout=30, json=False, need_bytes=False, **kwargs):  # pylint: disable=too-many-arguments
+    def get_url(self, url, post_data=None, params=None, timeout=30, **kwargs):  # pylint: disable=too-many-arguments
         """
-        need_bytes=True when trying access to torrent info (For calling torrent client). Previously we must parse
+        returns='content' when trying access to torrent info (For calling torrent client). Previously we must parse
         the URL to get torrent file
         """
-        if need_bytes:
-            data = super(newpctProvider, self).get_url(url, post_data=post_data, params=params, timeout=timeout, json=json, kwargs=kwargs)
+        trickery = kwargs.pop('returns', '')
+        if trickery == 'content':
+            kwargs['returns'] = 'text'
+            data = super(newpctProvider, self).get_url(url, post_data=post_data, params=params, timeout=timeout, **kwargs)
             url = re.search(r'http://tumejorserie.com/descargar/.+\.torrent', data, re.DOTALL).group()
+            url = urljoin(self.url, url.rsplit('=', 1)[-1])
 
-        return super(newpctProvider, self).get_url(url, post_data=post_data, params=params, timeout=timeout,
-                                                   json=json, need_bytes=need_bytes, kwargs=kwargs)
+        kwargs['returns'] = trickery
+        return super(newpctProvider, self).get_url(url, post_data=post_data, params=params,
+                                                   timeout=timeout, **kwargs)
 
     def download_result(self, result):
         """
@@ -154,23 +158,23 @@ class newpctProvider(TorrentProvider):
 
         for url in urls:
             # Search results don't return torrent files directly, it returns show sheets so we must parse showSheet to access torrent.
-            data = self.get_url(url)
+            data = self.get_url(url, returns='text')
             url_torrent = re.search(r'http://tumejorserie.com/descargar/.+\.torrent', data, re.DOTALL).group()
 
             if url_torrent.startswith('http'):
                 self.headers.update({'Referer': '/'.join(url_torrent.split('/')[:3]) + '/'})
 
-            logger.log('Downloading a result from {}'.format(url))
+            logger.log('Downloading a result from {0}'.format(url))
 
             if helpers.download_file(url_torrent, filename, session=self.session, headers=self.headers):
                 if self._verify_download(filename):
-                    logger.log('Saved result to {}'.format(filename), logger.INFO)
+                    logger.log('Saved result to {0}'.format(filename), logger.INFO)
                     return True
                 else:
-                    logger.log('Could not download {}'.format(url), logger.WARNING)
+                    logger.log('Could not download {0}'.format(url), logger.WARNING)
                     helpers.remove_file_failed(filename)
 
-        if len(urls):
+        if urls:
             logger.log('Failed to download any results', logger.WARNING)
 
         return False

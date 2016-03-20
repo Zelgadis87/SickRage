@@ -18,7 +18,6 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-from requests.compat import urlencode
 from requests.utils import dict_from_cookiejar
 
 from sickbeard import logger, tvcache
@@ -40,7 +39,6 @@ class DanishbitsProvider(TorrentProvider):  # pylint: disable=too-many-instance-
         self.password = None
 
         # Torrent Stats
-        self.ratio = None
         self.minseed = 0
         self.minleech = 0
         self.freeleech = True
@@ -69,7 +67,7 @@ class DanishbitsProvider(TorrentProvider):  # pylint: disable=too-many-instance-
             'login': 'Login',
         }
 
-        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, returns='text')
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             self.session.cookies.clear()
@@ -107,20 +105,17 @@ class DanishbitsProvider(TorrentProvider):  # pylint: disable=too-many-instance-
 
         for mode in search_strings:
             items = []
-            logger.log(u"Search Mode: {}".format(mode), logger.DEBUG)
+            logger.log(u"Search Mode: {0}".format(mode), logger.DEBUG)
 
             for search_string in search_strings[mode]:
 
                 if mode != 'RSS':
-                    logger.log(u"Search string: {}".format(search_string.decode("utf-8")),
+                    logger.log(u"Search string: {0}".format(search_string.decode("utf-8")),
                                logger.DEBUG)
 
                 search_params['search'] = search_string
 
-                search_url = "%s?%s" % (self.urls['search'], urlencode(search_params))
-                logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
-
-                data = self.get_url(search_url)
+                data = self.get_url(self.urls['search'], params=search_params, returns='text')
                 if not data:
                     logger.log(u"No data returned from provider", logger.DEBUG)
                     continue
@@ -167,9 +162,9 @@ class DanishbitsProvider(TorrentProvider):  # pylint: disable=too-many-instance-
                             torrent_size = cells[labels.index('Størrelse')].contents[0]
                             size = convert_size(torrent_size, units=units) or -1
 
-                            item = title, download_url, size, seeders, leechers
+                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                             if mode != 'RSS':
-                                logger.log(u"Found result: {} with {} seeders and {} leechers".format
+                                logger.log(u"Found result: {0} with {1} seeders and {2} leechers".format
                                            (title, seeders, leechers), logger.DEBUG)
 
                             items.append(item)
@@ -177,12 +172,10 @@ class DanishbitsProvider(TorrentProvider):  # pylint: disable=too-many-instance-
                             continue
 
             # For each search mode sort all the items by seeders if available
-            items.sort(key=lambda tup: tup[3], reverse=True)
+            items.sort(key=lambda d: try_int(d.get('seeders', 0)), reverse=True)
             results += items
 
         return results
 
-    def seed_ratio(self):
-        return self.ratio
 
 provider = DanishbitsProvider()

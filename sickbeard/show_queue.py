@@ -22,6 +22,8 @@ import traceback
 
 import sickbeard
 
+import time
+
 from imdb import _exceptions as imdb_exceptions
 from sickbeard.common import WANTED
 from sickbeard.tv import TVShow
@@ -39,7 +41,7 @@ from libtrakt import TraktAPI
 from sickrage.helper.encoding import ek
 from sickbeard.helpers import makeDir, chmodAsParent
 from sickrage.helper.common import sanitize_filename
-import time
+from sickrage.show.Show import Show
 
 
 class ShowQueue(generic_queue.GenericQueue):
@@ -168,11 +170,11 @@ class ShowQueue(generic_queue.GenericQueue):
             raise CantRemoveShowException(u'Failed removing show: Show does not have an indexer id')
 
         if self._isInQueue(show, (ShowQueueActions.REMOVE,)):
-            raise CantRemoveShowException(u'[{!s}]: Show is already queued to be removed'.format(show.indexerid))
+            raise CantRemoveShowException(u'[{0!s}]: Show is already queued to be removed'.format(show.indexerid))
 
         # remove other queued actions for this show.
         for item in self.queue:
-            if all([item, item.show, item != self.currentItem, show.indexerid == item.show.indexerid]):
+            if item and item.show and item != self.currentItem and show.indexerid == item.show.indexerid:
                 self.queue.remove(item)
 
         queue_item_obj = QueueItemRemove(show=show, full=full)
@@ -322,7 +324,7 @@ class QueueItemAdd(ShowQueueItem):
 
             # this usually only happens if they have an NFO in their show dir which gave us a Indexer ID that has no proper english version of the show
             if getattr(s, 'seriesname', None) is None:
-                logger.log(u"Show in {} has no name on {}, probably searched with the wrong language.".format
+                logger.log(u"Show in {0} has no name on {1}, probably searched with the wrong language.".format
                            (self.showDir, sickbeard.indexerApi(self.indexer).name), logger.ERROR)
 
                 ui.notifications.error("Unable to add show",
@@ -340,14 +342,13 @@ class QueueItemAdd(ShowQueueItem):
                 self._finishEarly()
                 return
         except Exception as e:
-            logger.log(u"%s Error while loading information from indexer %s. Error: %r" % (self.indexer_id, sickbeard.indexerApi(self.indexer).name, ex(e)), logger.ERROR)
+            logger.log(u"{0!s} Error while loading information from indexer {1!s}. Error: {2!r}".format(self.indexer_id, sickbeard.indexerApi(self.indexer).name, ex(e)), logger.ERROR)
             # logger.log(u"Show name with ID %s doesn't exist on %s anymore. If you are using trakt, it will be removed from your TRAKT watchlist. If you are adding manually, try removing the nfo and adding again" %
             #            (self.indexer_id, sickbeard.indexerApi(self.indexer).name), logger.WARNING)
 
             ui.notifications.error(
                 "Unable to add show",
-                "Unable to look up the show in %s on %s using ID %s, not using the NFO. Delete .nfo and try adding manually again." %
-                (self.showDir, sickbeard.indexerApi(self.indexer).name, self.indexer_id)
+                "Unable to look up the show in {0!s} on {1!s} using ID {2!s}, not using the NFO. Delete .nfo and try adding manually again.".format(self.showDir, sickbeard.indexerApi(self.indexer).name, self.indexer_id)
             )
 
             if sickbeard.USE_TRAKT:
@@ -375,7 +376,16 @@ class QueueItemAdd(ShowQueueItem):
             return
 
         try:
-            newShow = TVShow(self.indexer, self.indexer_id, self.lang)
+            try:
+                newShow = TVShow(self.indexer, self.indexer_id, self.lang)
+            except MultipleShowObjectsException as error:
+                # If we have the show in our list, but the location is wrong, lets fix it and refresh!
+                existing_show = Show.find(sickbeard.showList, self.indexer_id)
+                if existing_show and not ek(os.path.isdir, existing_show._location):  # pylint: disable=protected-access
+                    newShow = existing_show
+                else:
+                    raise error
+
             newShow.loadFromIndexer()
 
             self.show = newShow
@@ -427,6 +437,7 @@ class QueueItemAdd(ShowQueueItem):
         except MultipleShowObjectsException:
             logger.log(u"The show in " + self.showDir + " is already in your show list, skipping", logger.WARNING)
             ui.notifications.error('Show skipped', "The show in " + self.showDir + " is already in your show list")
+
             self._finishEarly()
             return
 
@@ -453,7 +464,8 @@ class QueueItemAdd(ShowQueueItem):
             raise
 
         # add it to the show list
-        sickbeard.showList.append(self.show)
+        if not Show.find(sickbeard.showList, self.indexer_id):
+            sickbeard.showList.append(self.show)
 
         try:
             self.show.loadEpisodesFromIndexer()
@@ -704,13 +716,13 @@ class QueueItemRemove(ShowQueueItem):
 
     def run(self):
         ShowQueueItem.run(self)
-        logger.log(u"Removing %s" % self.show.name)
+        logger.log(u"Removing {0!s}".format(self.show.name))
         self.show.deleteShow(full=self.full)
 
         if sickbeard.USE_TRAKT:
             try:
                 sickbeard.traktCheckerScheduler.action.removeShowFromTraktLibrary(self.show)
             except Exception as e:
-                logger.log(u"Unable to delete show from Trakt: %s. Error: %s" % (self.show.name, ex(e)), logger.WARNING)
+                logger.log(u"Unable to delete show from Trakt: {0!s}. Error: {1!s}".format(self.show.name, ex(e)), logger.WARNING)
 
         self.finish()
