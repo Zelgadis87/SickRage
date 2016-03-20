@@ -20,7 +20,7 @@
 
 import re
 
-from requests.compat import urlencode
+from requests.compat import urljoin
 from requests.utils import dict_from_cookiejar
 
 from sickbeard import logger, tvcache
@@ -42,15 +42,14 @@ class PhxBitProvider(TorrentProvider):  # pylint: disable=too-many-instance-attr
         self.password = None
 
         # Torrent Stats
-        self.ratio = None
         self.minseed = None
         self.minleech = None
 
         # URLs
         self.url = 'https://phxbit.com'
         self.urls = {
-            'login': self.url + '/connect.php',
-            'search': self.url + '/sphinx.php?'
+            'login': urljoin(self.url, '/connect.php'),
+            'search': urljoin(self.url, '/sphinx.php')
         }
 
         # Proper Strings
@@ -68,7 +67,7 @@ class PhxBitProvider(TorrentProvider):  # pylint: disable=too-many-instance-attr
             'password': self.password,
         }
 
-        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
+        response = self.get_url(self.urls['login'], post_data=login_params, returns='text')
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -104,22 +103,19 @@ class PhxBitProvider(TorrentProvider):  # pylint: disable=too-many-instance-attr
 
         for mode in search_strings:
             items = []
-            logger.log(u"Search Mode: {}".format(mode), logger.DEBUG)
+            logger.log(u"Search Mode: {0}".format(mode), logger.DEBUG)
 
             for search_string in search_strings[mode]:
 
                 if mode != 'RSS':
                     # Use exact=1 parameter if we're doing a backlog or manual search
                     search_params['exact'] = 1
-                    logger.log(u"Search string: {}".format(search_string.decode("utf-8")),
+                    logger.log(u"Search string: {0}".format(search_string.decode("utf-8")),
                                logger.DEBUG)
 
                 search_params['q'] = search_string
 
-                search_url = self.urls['search'] + urlencode(search_params)
-                logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
-
-                data = self.get_url(search_url)
+                data = self.get_url(self.urls['search'], params=search_params, returns='text')
                 if not data:
                     continue
 
@@ -153,27 +149,25 @@ class PhxBitProvider(TorrentProvider):  # pylint: disable=too-many-instance-attr
                             # Filter unseeded torrent
                             if seeders < self.minseed or leechers < self.minleech:
                                 if mode != 'RSS':
-                                    logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {} (S:{} L:{})".format(title, seeders, leechers), logger.DEBUG)
+                                    logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
                                 continue
 
                             torrent_size = cells[labels.index('Taille')].get_text(strip=True)
                             size = convert_size(torrent_size, units=units) or -1
 
-                            item = title, download_url, size, seeders, leechers
+                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                             if mode != 'RSS':
-                                logger.log(u"Found result: %s with %s seeders and %s leechers" % (title, seeders, leechers), logger.DEBUG)
+                                logger.log(u"Found result: {0!s} with {1!s} seeders and {2!s} leechers".format(title, seeders, leechers), logger.DEBUG)
 
                             items.append(item)
                         except StandardError:
                             continue
 
             # For each search mode sort all the items by seeders if available
-            items.sort(key=lambda tup: tup[3], reverse=True)
+            items.sort(key=lambda d: try_int(d.get('seeders', 0)), reverse=True)
             results += items
 
         return results
 
-    def seed_ratio(self):
-        return self.ratio
 
 provider = PhxBitProvider()

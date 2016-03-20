@@ -19,7 +19,6 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
 import re
-from requests.compat import urlencode
 
 from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
@@ -37,7 +36,6 @@ class TokyoToshokanProvider(TorrentProvider):  # pylint: disable=too-many-instan
         self.public = True
         self.supports_absolute_numbering = True
         self.anime_only = True
-        self.ratio = None
 
         self.minseed = None
         self.minleech = None
@@ -49,9 +47,6 @@ class TokyoToshokanProvider(TorrentProvider):  # pylint: disable=too-many-instan
         }
         self.cache = tvcache.TVCache(self, min_time=15)  # only poll TokyoToshokan every 15 minutes max
 
-    def seed_ratio(self):
-        return self.ratio
-
     def search(self, search_strings, age=0, ep_obj=None):  # pylint: disable=too-many-locals
         results = []
         if not self.show or not self.show.is_anime:
@@ -59,10 +54,10 @@ class TokyoToshokanProvider(TorrentProvider):  # pylint: disable=too-many-instan
 
         for mode in search_strings:
             items = []
-            logger.log(u"Search Mode: {}".format(mode), logger.DEBUG)
+            logger.log(u"Search Mode: {0}".format(mode), logger.DEBUG)
             for search_string in search_strings[mode]:
                 if mode != 'RSS':
-                    logger.log(u"Search string: {}".format(search_string.decode("utf-8")),
+                    logger.log(u"Search string: {0}".format(search_string.decode("utf-8")),
                                logger.DEBUG)
 
                 search_params = {
@@ -70,8 +65,7 @@ class TokyoToshokanProvider(TorrentProvider):  # pylint: disable=too-many-instan
                     "type": 1,  # get anime types
                 }
 
-                logger.log(u"Search URL: %s" % self.urls['search'] + '?' + urlencode(search_params), logger.DEBUG)
-                data = self.get_url(self.urls['search'], params=search_params)
+                data = self.get_url(self.urls['search'], params=search_params, returns='text')
                 if not data:
                     continue
 
@@ -108,18 +102,18 @@ class TokyoToshokanProvider(TorrentProvider):  # pylint: disable=too-many-instan
                         # Filter unseeded torrent
                         if seeders < self.minseed or leechers < self.minleech:
                             if mode != 'RSS':
-                                logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {} (S:{} L:{})".format
+                                logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format
                                            (title, seeders, leechers), logger.DEBUG)
                             continue
 
-                        item = title, download_url, size, seeders, leechers
+                        item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                         if mode != 'RSS':
-                            logger.log(u"Found result: %s with %s seeders and %s leechers" % (title, seeders, leechers), logger.DEBUG)
+                            logger.log(u"Found result: {0!s} with {1!s} seeders and {2!s} leechers".format(title, seeders, leechers), logger.DEBUG)
 
                         items.append(item)
 
             # For each search mode sort all the items by seeders if available
-            items.sort(key=lambda tup: tup[3], reverse=True)
+            items.sort(key=lambda d: try_int(d.get('seeders', 0)), reverse=True)
             results += items
 
         return results

@@ -19,7 +19,8 @@ from . import Provider
 from .. import __short_version__
 from ..exceptions import ProviderError
 from ..subtitle import Subtitle, fix_line_ending, guess_matches
-from ..video import Episode, Movie, sanitize
+from ..utils import sanitize
+from ..video import Episode, Movie
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class PodnapisiSubtitle(Subtitle):
 class PodnapisiProvider(Provider):
     languages = ({Language('por', 'BR'), Language('srp', script='Latn')} |
                  {Language.fromalpha2(l) for l in language_converters['alpha2'].codes})
-    server_url = 'http://podnapisi.eu/subtitles/'
+    server_url = 'http://podnapisi.net/subtitles/'
 
     def initialize(self):
         self.session = Session()

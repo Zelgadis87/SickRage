@@ -31,10 +31,9 @@ sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '../l
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from bs4 import BeautifulSoup
-from sickbeard.helpers import getURL
+from sickbeard.helpers import getURL, make_session
 from sickbeard.providers.bitcannon import BitCannonProvider
 from sickbeard.tv import TVEpisode, TVShow
-import requests  # pylint: disable=import-error
 import tests.test_lib as test
 import urlparse
 
@@ -65,7 +64,7 @@ class TorrentBasicTests(test.SickbeardTestDBCase):
         bitcannon.custom_url = ""        # true testing requires a valid URL here (e.g., "http://localhost:3000/")
         bitcannon.api_key = ""
 
-        if len(bitcannon.custom_url) > 0:
+        if bitcannon.custom_url:
             # pylint: disable=protected-access
             search_strings_list = bitcannon._get_episode_search_strings(self.shows[0].episodes[0])  # [{'Episode': ['Italian Works S05E10']}]
             for search_strings in search_strings_list:
@@ -81,7 +80,7 @@ class TorrentBasicTests(test.SickbeardTestDBCase):
         url = 'http://kickass.to/'
         search_url = 'http://kickass.to/usearch/American%20Dad%21%20S08%20-S08E%20category%3Atv/?field=seeders&sorder=desc'
 
-        html = getURL(search_url, session=requests.Session(), returns='text')
+        html = getURL(search_url, session=make_session(), returns='text')
         if not html:
             return
 

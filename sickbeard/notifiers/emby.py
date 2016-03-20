@@ -48,8 +48,8 @@ class Notifier(object):
         if not emby_apikey:
             emby_apikey = sickbeard.EMBY_APIKEY
 
-        url = 'http://%s/emby/Notifications/Admin' % host
-        values = {'Name': 'SickRage', 'Description': message, 'ImageUrl': 'https://raw.githubusercontent.com/SickRage/SickRage/master/gui/slick/images/sickrage-shark-mascot.png'}
+        url = 'http://{0!s}/emby/Notifications/Admin'.format(host)
+        values = {'Name': 'SickRage', 'Description': message, 'ImageUrl': sickbeard.LOGO_URL}
         data = json.dumps(values)
         try:
             req = urllib2.Request(url, data)
@@ -98,11 +98,11 @@ class Notifier(object):
                 else:
                     logger.log(u'EMBY: Provider unknown', logger.WARNING)
                     return False
-                query = '?%sid=%s' % (provider, show.indexerid)
+                query = '?{0!s}id={1!s}'.format(provider, show.indexerid)
             else:
                 query = ''
 
-            url = 'http://%s/emby/Library/Series/Updated%s' % (sickbeard.EMBY_HOST, query)
+            url = 'http://{0!s}/emby/Library/Series/Updated{1!s}'.format(sickbeard.EMBY_HOST, query)
             values = {}
             data = urllib.urlencode(values)
             try:

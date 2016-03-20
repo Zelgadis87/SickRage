@@ -1849,7 +1849,7 @@ var SICKRAGE = {
                 $('.show-grid').isotope({
                     filter: function () {
                       var name = $(this).attr('data-name').toLowerCase();
-                      return name.indexOf($('#filterShowName').val()) > -1;
+                      return name.indexOf($('#filterShowName').val().toLowerCase()) > -1;
                     }
                 });
             }, 500));
@@ -1949,9 +1949,9 @@ var SICKRAGE = {
                     7: { filter: 'parsed' }
                 },
                 widgetOptions: {
-                    filter_columnFilters: true, // jshint ignore:line
-                    filter_hideFilters: true, // jshint ignore:line
-                    filter_saveFilters: true, // jshint ignore:line
+                    'filter_columnFilters': true,
+                    'filter_hideFilters': true,
+                    // 'filter_saveFilters': true,
                     filter_functions: { // jshint ignore:line
                         5: function(e, n, f) {
                             var test = false;
@@ -2170,7 +2170,8 @@ var SICKRAGE = {
 
                 if (epArr.length === 0) { return false; }
 
-                window.location.href = srRoot + '/home/setStatus?show=' + $('#showID').attr('value') + '&eps=' + epArr.join('|') + '&status=' + $('#statusSelect').val();
+                $.post(srRoot + '/home/setStatus', 'show=' + $('#showID').attr('value') + '&eps=' + epArr.join('|') + '&status=' + $('#statusSelect').val());
+                location.reload();
             });
 
             $('.seasonCheck').on('click', function(){
@@ -2612,7 +2613,8 @@ var SICKRAGE = {
 
                 if (removeArr.length === 0) { return false; }
 
-                window.location.href = srRoot + '/manage/failedDownloads?toRemove='+removeArr.join('|');
+                $.post(srRoot + '/manage/failedDownloads', 'toRemove='+removeArr.join('|'));
+                location.reload();
             });
 
             if($('.removeCheck').length){
@@ -3212,7 +3214,12 @@ var SICKRAGE = {
                     return false;
                 }
 
-                window.location.href = srRoot + '/addShows/addExistingShows?promptForSettings=' + ($('#promptForSettings').prop('checked') ? 'on' : 'off') + '&shows_to_add=' + dirArr.join('&shows_to_add=');
+                var url = srRoot + '/addShows/addExistingShows?promptForSettings=' + ($('#promptForSettings').prop('checked') ? 'on' : 'off') + '&shows_to_add=' + dirArr.join('&shows_to_add=');
+                if(url.length < 2083) {
+                    window.location.href = url;
+                } else {
+                    alert("You've selected too many shows, please uncheck some and try again.");
+                }
             });
 
             function loadContent() {
@@ -3227,7 +3234,7 @@ var SICKRAGE = {
                 });
 
                 $('#tableDiv').html('<img id="searchingAnim" src="' + srRoot + '/images/loading32.gif" height="32" width="32" /> loading folders...');
-                $.get(srRoot + '/addShows/massAddTable/', url, function(data) {
+                $.post(srRoot + '/addShows/massAddTable/', url, function(data) {
                     $('#tableDiv').html(data);
                     $("#addRootDirTable").tablesorter({
                         //sortList: [[1,0]],

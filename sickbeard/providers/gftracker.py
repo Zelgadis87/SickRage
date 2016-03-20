@@ -20,7 +20,6 @@
 
 import re
 
-from requests.compat import urlencode
 from requests.utils import dict_from_cookiejar
 
 from sickbeard import logger, tvcache
@@ -43,7 +42,6 @@ class GFTrackerProvider(TorrentProvider):  # pylint: disable=too-many-instance-a
         self.password = None
 
         # Torrent Stats
-        self.ratio = None
         self.minseed = None
         self.minleech = None
 
@@ -77,8 +75,8 @@ class GFTrackerProvider(TorrentProvider):  # pylint: disable=too-many-instance-a
         }
 
         # Initialize session with a GET to have cookies
-        self.get_url(self.url, timeout=30)  # pylint: disable=unused-variable
-        response = self.get_url(self.urls['login'], post_data=login_params, timeout=30)
+        self.get_url(self.url, returns='text')
+        response = self.get_url(self.urls['login'], post_data=login_params, returns='text')
         if not response:
             logger.log(u"Unable to connect to provider", logger.WARNING)
             return False
@@ -120,20 +118,17 @@ class GFTrackerProvider(TorrentProvider):  # pylint: disable=too-many-instance-a
 
         for mode in search_strings:
             items = []
-            logger.log(u"Search Mode: {}".format(mode), logger.DEBUG)
+            logger.log(u"Search Mode: {0}".format(mode), logger.DEBUG)
 
             for search_string in search_strings[mode]:
 
                 if mode != 'RSS':
-                    logger.log(u"Search string: {}".format(search_string.decode("utf-8")),
+                    logger.log(u"Search string: {0}".format(search_string.decode("utf-8")),
                                logger.DEBUG)
 
                 search_params['search'] = search_string
 
-                search_url = "%s?%s" % (self.urls['search'], urlencode(search_params))
-                logger.log(u"Search URL: %s" % search_url, logger.DEBUG)
-
-                data = self.get_url(search_url)
+                data = self.get_url(self.urls['search'], params=search_params, returns='text')
                 if not data:
                     logger.log(u"No data returned from provider", logger.DEBUG)
                     continue
@@ -175,9 +170,9 @@ class GFTrackerProvider(TorrentProvider):  # pylint: disable=too-many-instance-a
                             torrent_size = cells[labels.index('Size/Snatched')].get_text(strip=True).split('/', 1)[0]
                             size = convert_size(torrent_size, units=units) or -1
 
-                            item = title, download_url, size, seeders, leechers
+                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                             if mode != 'RSS':
-                                logger.log(u"Found result: {} with {} seeders and {} leechers".format
+                                logger.log(u"Found result: {0} with {1} seeders and {2} leechers".format
                                            (title, seeders, leechers), logger.DEBUG)
 
                             items.append(item)
@@ -185,12 +180,10 @@ class GFTrackerProvider(TorrentProvider):  # pylint: disable=too-many-instance-a
                             continue
 
             # For each search mode sort all the items by seeders if available
-            items.sort(key=lambda tup: tup[3], reverse=True)
+            items.sort(key=lambda d: try_int(d.get('seeders', 0)), reverse=True)
             results += items
 
         return results
 
-    def seed_ratio(self):
-        return self.ratio
 
 provider = GFTrackerProvider()

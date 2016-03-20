@@ -43,7 +43,6 @@ class TorrentLeechProvider(TorrentProvider):  # pylint: disable=too-many-instanc
         self.password = None
 
         # Torrent Stats
-        self.ratio = None
         self.minseed = None
         self.minleech = None
 
@@ -71,7 +70,7 @@ class TorrentLeechProvider(TorrentProvider):  # pylint: disable=too-many-instanc
             "remember_me": "on",
         }
 
-        response = self.get_url(self.urls["login"], post_data=login_params, timeout=30, returns="text")
+        response = self.get_url(self.urls["login"], post_data=login_params, returns="text")
         if not response:
             logger.log("Unable to connect to provider", logger.WARNING)
             return False
@@ -103,12 +102,12 @@ class TorrentLeechProvider(TorrentProvider):  # pylint: disable=too-many-instanc
 
         for mode in search_strings:
             items = []
-            logger.log("Search Mode: {}".format(mode), logger.DEBUG)
+            logger.log("Search Mode: {0}".format(mode), logger.DEBUG)
 
             for search_string in search_strings[mode]:
 
                 if mode != "RSS":
-                    logger.log("Search string: {}".format(search_string.decode("utf-8")),
+                    logger.log("Search string: {0}".format(search_string.decode("utf-8")),
                                logger.DEBUG)
 
                     categories = ["2", "7", "35"]
@@ -161,9 +160,9 @@ class TorrentLeechProvider(TorrentProvider):  # pylint: disable=too-many-instanc
                             torrent_size = result.find_all("td")[labels.index("Size")].get_text()
                             size = convert_size(torrent_size, units=units) or -1
 
-                            item = title, download_url, size, seeders, leechers
+                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                             if mode != "RSS":
-                                logger.log("Found result: {} with {} seeders and {} leechers".format
+                                logger.log("Found result: {0} with {1} seeders and {2} leechers".format
                                            (title, seeders, leechers), logger.DEBUG)
 
                             items.append(item)
@@ -171,12 +170,10 @@ class TorrentLeechProvider(TorrentProvider):  # pylint: disable=too-many-instanc
                             continue
 
             # For each search mode sort all the items by seeders if available
-            items.sort(key=lambda tup: tup[3], reverse=True)
+            items.sort(key=lambda d: try_int(d.get('seeders', 0)), reverse=True)
             results += items
 
         return results
 
-    def seed_ratio(self):
-        return self.ratio
 
 provider = TorrentLeechProvider()

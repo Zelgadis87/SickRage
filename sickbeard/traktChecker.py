@@ -112,7 +112,7 @@ class TraktChecker(object):
 
             traktShow = [x for x in library if int(indexerid) in [int(x['show']['ids']['tvdb'] or 0), int(x['show']['ids']['tvrage'] or 0)]]
         except traktException as e:
-            logger.log(u"Could not connect to Trakt service. Aborting library check. Error: %s" % repr(e), logger.WARNING)
+            logger.log(u"Could not connect to Trakt service. Aborting library check. Error: {0!s}".format(repr(e)), logger.WARNING)
 
         return traktShow
 
@@ -136,12 +136,12 @@ class TraktChecker(object):
             else:
                 data['shows'][0]['ids']['tvrage'] = show_obj.indexerid
 
-            logger.log(u"Removing %s from trakt.tv library" % show_obj.name, logger.DEBUG)
+            logger.log(u"Removing {0!s} from trakt.tv library".format(show_obj.name), logger.DEBUG)
 
             try:
                 self.trakt_api.traktRequest("sync/collection/remove", data, method='POST')
             except traktException as e:
-                logger.log(u"Could not connect to Trakt service. Aborting removing show %s from Trakt library. Error: %s" % (show_obj.name, repr(e)), logger.WARNING)
+                logger.log(u"Could not connect to Trakt service. Aborting removing show {0!s} from Trakt library. Error: {1!s}".format(show_obj.name, repr(e)), logger.WARNING)
 
     def addShowToTraktLibrary(self, show_obj):
         """
@@ -169,13 +169,13 @@ class TraktChecker(object):
             else:
                 data['shows'][0]['ids']['tvrage'] = show_obj.indexerid
 
-        if len(data):
-            logger.log(u"Adding %s to trakt.tv library" % show_obj.name, logger.DEBUG)
+        if data:
+            logger.log(u"Adding {0!s} to trakt.tv library".format(show_obj.name), logger.DEBUG)
 
             try:
                 self.trakt_api.traktRequest("sync/collection", data, method='POST')
             except traktException as e:
-                logger.log(u"Could not connect to Trakt service. Aborting adding show %s to Trakt library. Error: %s" % (show_obj.name, repr(e)), logger.WARNING)
+                logger.log(u"Could not connect to Trakt service. Aborting adding show {0!s} to Trakt library. Error: {1!s}".format(show_obj.name, repr(e)), logger.WARNING)
                 return
 
     def syncLibrary(self):
@@ -209,13 +209,13 @@ class TraktChecker(object):
                                        logger.DEBUG)
                             trakt_data.append((cur_episode["showid"], cur_episode["indexer"], cur_episode["show_name"], cur_episode["startyear"], cur_episode["season"], cur_episode["episode"]))
 
-                if len(trakt_data):
+                if trakt_data:
                     try:
                         data = self.trakt_bulk_data_generate(trakt_data)
                         self.trakt_api.traktRequest("sync/collection/remove", data, method='POST')
                         self._getShowCollection()
                     except traktException as e:
-                        logger.log(u"Could not connect to Trakt service. Error: %s" % ex(e), logger.WARNING)
+                        logger.log(u"Could not connect to Trakt service. Error: {0!s}".format(ex(e)), logger.WARNING)
 
             logger.log(u"COLLECTION::REMOVE::FINISH - Look for Episodes to Remove From Trakt Collection", logger.DEBUG)
 
@@ -240,13 +240,13 @@ class TraktChecker(object):
                                    logger.DEBUG)
                         trakt_data.append((cur_episode["showid"], cur_episode["indexer"], cur_episode["show_name"], cur_episode["startyear"], cur_episode["season"], cur_episode["episode"]))
 
-                if len(trakt_data):
+                if trakt_data:
                     try:
                         data = self.trakt_bulk_data_generate(trakt_data)
                         self.trakt_api.traktRequest("sync/collection", data, method='POST')
                         self._getShowCollection()
                     except traktException as e:
-                        logger.log(u"Could not connect to Trakt service. Error: %s" % ex(e), logger.WARNING)
+                        logger.log(u"Could not connect to Trakt service. Error: {0!s}".format(ex(e)), logger.WARNING)
 
             logger.log(u"COLLECTION::ADD::FINISH - Look for Episodes to Add to Trakt Collection", logger.DEBUG)
 
@@ -287,13 +287,13 @@ class TraktChecker(object):
                                        logger.DEBUG)
                             trakt_data.append((cur_episode["showid"], cur_episode["indexer"], cur_episode["show_name"], cur_episode["startyear"], cur_episode["season"], cur_episode["episode"]))
 
-                if len(trakt_data):
+                if trakt_data:
                     try:
                         data = self.trakt_bulk_data_generate(trakt_data)
                         self.trakt_api.traktRequest("sync/watchlist/remove", data, method='POST')
                         self._getEpisodeWatchlist()
                     except traktException as e:
-                        logger.log(u"Could not connect to Trakt service. Error: %s" % ex(e), logger.WARNING)
+                        logger.log(u"Could not connect to Trakt service. Error: {0!s}".format(ex(e)), logger.WARNING)
 
                 logger.log(u"WATCHLIST::REMOVE::FINISH - Look for Episodes to Remove from Trakt Watchlist", logger.DEBUG)
 
@@ -319,13 +319,13 @@ class TraktChecker(object):
                         trakt_data.append((cur_episode["showid"], cur_episode["indexer"], cur_episode["show_name"], cur_episode["startyear"], cur_episode["season"],
                                            cur_episode["episode"]))
 
-                if len(trakt_data):
+                if trakt_data:
                     try:
                         data = self.trakt_bulk_data_generate(trakt_data)
                         self.trakt_api.traktRequest("sync/watchlist", data, method='POST')
                         self._getEpisodeWatchlist()
                     except traktException as e:
-                        logger.log(u"Could not connect to Trakt service. Error %s" % ex(e), logger.WARNING)
+                        logger.log(u"Could not connect to Trakt service. Error {0!s}".format(ex(e)), logger.WARNING)
 
             logger.log(u"WATCHLIST::ADD::FINISH - Look for Episodes to Add to Trakt Watchlist", logger.DEBUG)
 
@@ -340,7 +340,7 @@ class TraktChecker(object):
                     trakt_id = sickbeard.indexerApi(show.indexer).config['trakt_id']
 
                     if not self._checkInList(trakt_id, str(show.indexerid), '0', '0', List='Show'):
-                        logger.log(u"Adding Show: Indexer %s %s - %s to Watchlist" % (trakt_id, str(show.indexerid), show.name), logger.DEBUG)
+                        logger.log(u"Adding Show: Indexer {0!s} {1!s} - {2!s} to Watchlist".format(trakt_id, str(show.indexerid), show.name), logger.DEBUG)
                         show_el = {'title': show.name, 'year': show.startyear, 'ids': {}}
                         if trakt_id == 'tvdb_id':
                             show_el['ids']['tvdb'] = show.indexerid
@@ -348,13 +348,13 @@ class TraktChecker(object):
                             show_el['ids']['tvrage'] = show.indexerid
                         trakt_data.append(show_el)
 
-                if len(trakt_data):
+                if trakt_data:
                     try:
                         data = {'shows': trakt_data}
                         self.trakt_api.traktRequest("sync/watchlist", data, method='POST')
                         self._getShowWatchlist()
                     except traktException as e:
-                        logger.log(u"Could not connect to Trakt service. Error: %s" % ex(e), logger.WARNING)
+                        logger.log(u"Could not connect to Trakt service. Error: {0!s}".format(ex(e)), logger.WARNING)
 
             logger.log(u"SHOW_WATCHLIST::ADD::FINISH - Look for Shows to Add to Trakt Watchlist", logger.DEBUG)
 
@@ -368,12 +368,15 @@ class TraktChecker(object):
                         try:
                             progress = self.trakt_api.traktRequest("shows/" + show.imdbid + "/progress/watched") or []
                         except traktException as e:
-                            logger.log(u"Could not connect to Trakt service. Aborting removing show %s from SickRage. Error: %s" % (show.name, repr(e)), logger.WARNING)
+                            logger.log(u"Could not connect to Trakt service. Aborting removing show {0!s} from SickRage. Error: {1!s}".format(show.name, repr(e)), logger.WARNING)
                             return
 
-                        if 'aired' in progress and 'completed' in progress and progress['aired'] == progress['completed']:
+                        if not progress:
+                            return
+
+                        if progress.get('aired', True) == progress.get('completed', False):
                             sickbeard.showQueueScheduler.action.removeShow(show, full=True)
-                            logger.log(u"Show: %s has been removed from SickRage" % show.name, logger.DEBUG)
+                            logger.log(u"Show: {0!s} has been removed from SickRage".format(show.name), logger.DEBUG)
 
             logger.log(u"SHOW_SICKRAGE::REMOVE::FINISH - Trakt Show Watchlist", logger.DEBUG)
 
@@ -446,7 +449,7 @@ class TraktChecker(object):
                             for episode_el in show['seasons'][season_el]['episodes']:
                                 setEpisodeToWanted(newShow, season, int(episode_el))
             except TypeError:
-                logger.log(u"Could not parse the output from trakt for %s " % show["title"], logger.DEBUG)
+                logger.log(u"Could not parse the output from trakt for {0!s} ".format(show["title"]), logger.DEBUG)
         logger.log(u"SHOW_WATCHLIST::CHECK::FINISH - Trakt Episode Watchlist", logger.DEBUG)
 
     @staticmethod
@@ -468,7 +471,7 @@ class TraktChecker(object):
                 dir_exists = helpers.makeDir(showPath)
 
                 if not dir_exists:
-                    logger.log(u"Unable to create the folder %s , can't add the show" % showPath, logger.WARNING)
+                    logger.log(u"Unable to create the folder {0!s} , can't add the show".format(showPath), logger.WARNING)
                     return
                 else:
                     helpers.chmodAsParent(showPath)
@@ -533,10 +536,10 @@ class TraktChecker(object):
                 tvdb = False
                 tvrage = False
 
-                if not watchlist_el['show']['ids']["tvdb"] is None:
+                if watchlist_el['show']['ids']["tvdb"] is not None:
                     tvdb = True
 
-                if not watchlist_el['show']['ids']["tvrage"] is None:
+                if watchlist_el['show']['ids']["tvrage"] is not None:
                     tvrage = True
 
                 title = watchlist_el['show']['title']
@@ -550,7 +553,7 @@ class TraktChecker(object):
                     showid = str(watchlist_el['show']['ids'][tvrage_id])
                     self.ShowWatchlist[tvrage_id + '_id'][showid] = {'id': showid, 'title': title, 'year': year}
         except traktException as e:
-            logger.log(u"Could not connect to trakt service, cannot download Show Watchlist: %s" % repr(e), logger.WARNING)
+            logger.log(u"Could not connect to trakt service, cannot download Show Watchlist: {0!s}".format(repr(e)), logger.WARNING)
             return False
         return True
 
@@ -568,10 +571,10 @@ class TraktChecker(object):
                 tvdb = False
                 tvrage = False
 
-                if not watchlist_el['show']['ids']["tvdb"] is None:
+                if watchlist_el['show']['ids']["tvdb"] is not None:
                     tvdb = True
 
-                if not watchlist_el['show']['ids']["tvrage"] is None:
+                if watchlist_el['show']['ids']["tvrage"] is not None:
                     tvrage = True
 
                 title = watchlist_el['show']['title']
@@ -603,7 +606,7 @@ class TraktChecker(object):
                     if episode not in self.EpisodeWatchlist[tvrage_id + '_id'][showid]['seasons'][season]['episodes'].keys():
                         self.EpisodeWatchlist[tvrage_id + '_id'][showid]['seasons'][season]['episodes'][episode] = episode
         except traktException as e:
-            logger.log(u"Could not connect to trakt service, cannot download Episode Watchlist: %s" % repr(e), logger.WARNING)
+            logger.log(u"Could not connect to trakt service, cannot download Episode Watchlist: {0!s}".format(repr(e)), logger.WARNING)
             return False
         return True
 
@@ -622,10 +625,10 @@ class TraktChecker(object):
                 tvdb = False
                 tvrage = False
 
-                if not watchlist_el['show']['ids']["tvdb"] is None:
+                if watchlist_el['show']['ids']["tvdb"] is not None:
                     tvdb = True
 
-                if not watchlist_el['show']['ids']["tvrage"] is None:
+                if watchlist_el['show']['ids']["tvrage"] is not None:
                     tvrage = True
 
                 title = watchlist_el['show']['title']
@@ -661,7 +664,7 @@ class TraktChecker(object):
                                 if episode not in self.Collectionlist[tvrage_id + '_id'][showid]['seasons'][season]['episodes'].keys():
                                     self.Collectionlist[tvrage_id + '_id'][showid]['seasons'][season]['episodes'][episode] = episode
         except traktException as e:
-            logger.log(u"Could not connect to trakt service, cannot download Show Collection: %s" % repr(e), logger.WARNING)
+            logger.log(u"Could not connect to trakt service, cannot download Show Collection: {0!s}".format(repr(e)), logger.WARNING)
             return False
         return True
 

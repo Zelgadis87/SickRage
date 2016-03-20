@@ -33,7 +33,6 @@ class BTDiggProvider(TorrentProvider):
         TorrentProvider.__init__(self, "BTDigg")
 
         self.public = True
-        self.ratio = 0
         self.url = "https://btdigg.org"
         self.urls = {"api": "https://api.btdigg.org/api/private-341ada3245790954/s02"}
 
@@ -50,12 +49,12 @@ class BTDiggProvider(TorrentProvider):
         search_params = {"p": 0}
         for mode in search_strings:
             items = []
-            logger.log("Search Mode: {}".format(mode), logger.DEBUG)
+            logger.log("Search Mode: {0}".format(mode), logger.DEBUG)
             for search_string in search_strings[mode]:
                 search_params["q"] = search_string
                 if mode != "RSS":
                     search_params["order"] = 0
-                    logger.log("Search string: {}".format(search_string.decode("utf-8")),
+                    logger.log("Search string: {0}".format(search_string.decode("utf-8")),
                                logger.DEBUG)
                 else:
                     search_params["order"] = 2
@@ -73,12 +72,12 @@ class BTDiggProvider(TorrentProvider):
                             continue
 
                         if float(torrent.pop("ff")):
-                            logger.log("Ignoring result for {} since it's been reported as fake (level = {})".format
+                            logger.log("Ignoring result for {0} since it's been reported as fake (level = {1})".format
                                        (title, torrent["ff"]), logger.DEBUG)
                             continue
 
                         if not int(torrent.pop("files")):
-                            logger.log("Ignoring result for {} because it has no files".format
+                            logger.log("Ignoring result for {0} because it has no files".format
                                        (title), logger.DEBUG)
                             continue
 
@@ -89,9 +88,9 @@ class BTDiggProvider(TorrentProvider):
                         torrent_size = torrent.pop("size")
                         size = convert_size(torrent_size) or -1
 
-                        item = title, download_url, size, seeders, leechers
+                        item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
                         if mode != "RSS":
-                            logger.log("Found result: %s " % title, logger.DEBUG)
+                            logger.log("Found result: {0!s} ".format(title), logger.DEBUG)
 
                         items.append(item)
 
@@ -102,7 +101,5 @@ class BTDiggProvider(TorrentProvider):
 
         return results
 
-    def seed_ratio(self):
-        return self.ratio
 
 provider = BTDiggProvider()
