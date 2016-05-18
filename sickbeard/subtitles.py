@@ -23,24 +23,28 @@ import os
 import re
 import datetime
 import traceback
-import subliminal
 import subprocess
-import sickbeard
+import threading
 from babelfish import Language, language_converters
+
+import subliminal
 from subliminal import ProviderPool, provider_manager
+
+import sickbeard
 from sickbeard import logger
 from sickbeard import history
 from sickbeard import db
-from sickbeard import processTV
 from sickbeard.common import Quality
-from sickbeard.helpers import remove_non_release_groups, isMediaFile, isRarFile
-from sickrage.helper.common import episode_num, dateTimeFormat, subtitle_extensions
-from sickrage.helper.exceptions import ex
-from sickrage.show.Show import Show
+from sickbeard.helpers import isMediaFile
 
-provider_manager.register('itasa = subliminal.providers.itasa:ItaSAProvider')
-provider_manager.register('legendastv = subliminal.providers.legendastv:LegendasTvProvider')
-provider_manager.register('napiprojekt = subliminal.providers.napiprojekt:NapiProjektProvider')
+from sickrage.helper.common import episode_num, dateTimeFormat
+from sickrage.show.Show import Show
+from sickrage.helper.exceptions import ex
+
+# https://github.com/Diaoul/subliminal/issues/536
+# provider_manager.register('napiprojekt = subliminal.providers.napiprojekt:NapiProjektProvider')
+if 'legendastv' not in provider_manager.names():
+    provider_manager.register('legendastv = subliminal.providers.legendastv:LegendasTVProvider')
 
 subliminal.region.configure('dogpile.cache.memory')
 
@@ -55,6 +59,55 @@ PROVIDER_URLS = {
     'thesubdb': 'http://www.thesubdb.com',
     'tvsubtitles': 'http://www.tvsubtitles.net'
 }
+
+
+class SubtitleProviderPool(object):  # pylint: disable=too-few-public-methods
+    _lock = threading.Lock()
+    _creation = None
+    _instance = None
+
+    @staticmethod
+    def __init_instance():
+        with SubtitleProviderPool._lock:
+            providers = enabled_service_list()
+            provider_configs = {
+                'addic7ed': {
+                    'username': sickbeard.ADDIC7ED_USER,
+                    'password': sickbeard.ADDIC7ED_PASS
+                },
+                'itasa': {
+                    'username': sickbeard.ITASA_USER,
+                    'password': sickbeard.ITASA_PASS
+                },
+                'legendastv': {
+                    'username': sickbeard.LEGENDASTV_USER,
+                    'password': sickbeard.LEGENDASTV_PASS
+                },
+                'opensubtitles': {
+                    'username': sickbeard.OPENSUBTITLES_USER,
+                    'password': sickbeard.OPENSUBTITLES_PASS
+                }
+            }
+
+            SubtitleProviderPool._instance = ProviderPool(providers=providers, provider_configs=provider_configs)
+
+    def __init__(self):
+        if SubtitleProviderPool._creation is None:
+            SubtitleProviderPool._creation = datetime.datetime.now()
+            self.__init_instance()
+        else:
+            delta = datetime.timedelta(minutes=15)
+            if SubtitleProviderPool._creation + delta < datetime.datetime.now():
+                SubtitleProviderPool._creation = datetime.datetime.now()
+                self.__init_instance()
+
+    @staticmethod
+    def reset():
+        SubtitleProviderPool._creation = None
+
+    def __getattr__(self, attr):
+        """ Delegate access to implementation """
+        return getattr(self._instance, attr)
 
 
 def sorted_service_list():
@@ -163,16 +216,7 @@ def download_subtitles(subtitles_info):  # pylint: disable=too-many-locals, too-
         return existing_subtitles, None
 
     providers = enabled_service_list()
-    provider_configs = {'addic7ed': {'username': sickbeard.ADDIC7ED_USER,
-                                     'password': sickbeard.ADDIC7ED_PASS},
-                        'itasa': {'username': sickbeard.ITASA_USER,
-                                  'password': sickbeard.ITASA_PASS},
-                        'legendastv': {'username': sickbeard.LEGENDASTV_USER,
-                                       'password': sickbeard.LEGENDASTV_PASS},
-                        'opensubtitles': {'username': sickbeard.OPENSUBTITLES_USER,
-                                          'password': sickbeard.OPENSUBTITLES_PASS}}
-
-    pool = ProviderPool(providers=providers, provider_configs=provider_configs)
+    pool = SubtitleProviderPool()
 
     try:
         subtitles_list = pool.list_subtitles(video, languages)
@@ -323,7 +367,7 @@ def get_subtitles(video):
     return sorted(result_list)
 
 
-class SubtitlesFinder(object):
+class SubtitlesFinder(object):  # pylint: disable=too-few-public-methods
     """The SubtitlesFinder will be executed every hour but will not necessarly search and download subtitles.
 
     Only if the defined rule is true.
@@ -331,130 +375,6 @@ class SubtitlesFinder(object):
 
     def __init__(self):
         self.amActive = False
-
-    @staticmethod
-    def subtitles_download_in_pp():  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-        logger.log(u'Checking for needed subtitles in Post-Process folder', logger.INFO)
-
-        providers = enabled_service_list()
-        provider_configs = {'addic7ed': {'username': sickbeard.ADDIC7ED_USER,
-                                         'password': sickbeard.ADDIC7ED_PASS},
-                            'itasa': {'username': sickbeard.ITASA_USER,
-                                      'password': sickbeard.ITASA_PASS},
-                            'legendastv': {'username': sickbeard.LEGENDASTV_USER,
-                                           'password': sickbeard.LEGENDASTV_PASS},
-                            'opensubtitles': {'username': sickbeard.OPENSUBTITLES_USER,
-                                              'password': sickbeard.OPENSUBTITLES_PASS}}
-
-        pool = ProviderPool(providers=providers, provider_configs=provider_configs)
-
-        # Search for all wanted languages
-        languages = {from_code(language) for language in wanted_languages()}
-        if not languages:
-            return
-
-        # Dict of language exceptions to use with subliminal
-        language_exceptions = {'pt-br': 'pob'}
-
-        run_post_process = False
-        # Check if PP folder is set
-        if sickbeard.TV_DOWNLOAD_DIR and os.path.isdir(sickbeard.TV_DOWNLOAD_DIR):
-
-            for root, _, files in os.walk(sickbeard.TV_DOWNLOAD_DIR, topdown=False):
-                rar_files = [rar_file for rar_file in files if isRarFile(rar_file)]
-                if rar_files and sickbeard.UNPACK:
-                    video_files = [video_file for video_file in files if isMediaFile(video_file)]
-                    if u'_UNPACK' not in root and (not video_files or root == sickbeard.TV_DOWNLOAD_DIR):
-                        logger.log(u'Found rar files in post-process folder: {0}'.format(rar_files), logger.DEBUG)
-                        result = processTV.ProcessResult()
-                        processTV.unRAR(root, rar_files, False, result)
-                elif rar_files and not sickbeard.UNPACK:
-                    logger.log(u'Unpack is disabled. Skipping: {0}'.format(rar_files), logger.WARNING)
-
-            for root, _, files in os.walk(sickbeard.TV_DOWNLOAD_DIR, topdown=False):
-                for filename in sorted(files):
-                    try:
-                        # Remove non release groups from video file. Needed to match subtitles
-                        new_filename = remove_non_release_groups(filename)
-                        if new_filename != filename:
-                            os.rename(filename, new_filename)
-                            filename = new_filename
-                    except Exception as error:
-                        logger.log(u"Couldn't remove non release groups from video file. Error: {0}".format
-                                   (ex(error)), logger.DEBUG)
-
-                    # Delete unwanted subtitles before downloading new ones
-                    if sickbeard.SUBTITLES_MULTI and sickbeard.SUBTITLES_KEEP_ONLY_WANTED and filename.rpartition('.')[2] in subtitle_extensions:
-                        subtitle_language = filename.rsplit('.', 2)[1].lower()
-                        if len(subtitle_language) == 2 and subtitle_language in language_converters['opensubtitles'].codes:
-                            subtitle_language = Language.fromcode(subtitle_language, 'alpha2').opensubtitles
-                        elif subtitle_language in language_exceptions:
-                            subtitle_language = language_exceptions.get(subtitle_language, subtitle_language)
-                        elif subtitle_language not in language_converters['opensubtitles'].codes:
-                            subtitle_language = 'unknown'
-                        if subtitle_language not in sickbeard.SUBTITLES_LANGUAGES:
-                            try:
-                                os.remove(os.path.join(root, filename))
-                                logger.log(u"Deleted '{0}' because we don't want subtitle language '{1}'. We only want '{2}' language(s)".format
-                                           (filename, subtitle_language, ','.join(sickbeard.SUBTITLES_LANGUAGES)), logger.DEBUG)
-                            except Exception as error:
-                                logger.log(u"Couldn't delete subtitle: {0}. Error: {1}".format(filename, ex(error)), logger.DEBUG)
-
-                    if isMediaFile(filename) and processTV.subtitles_enabled(filename):
-                        try:
-                            video = get_video(os.path.join(root, filename), subtitles=False, embedded_subtitles=False)
-                            subtitles_list = pool.list_subtitles(video, languages)
-
-                            for provider in providers:
-                                if provider in pool.discarded_providers:
-                                    logger.log(u'Could not search in {0} provider. Discarding for now'.format(provider), logger.DEBUG)
-
-                            if not subtitles_list:
-                                logger.log(u'No subtitles found for {0}'.format
-                                           (os.path.join(root, filename)), logger.DEBUG)
-                                continue
-
-                            logger.log(u'Found subtitle(s) canditate(s) for {0}'.format(filename), logger.INFO)
-                            hearing_impaired = sickbeard.SUBTITLES_HEARING_IMPAIRED
-                            user_score = 213 if sickbeard.SUBTITLES_PERFECT_MATCH else 198
-                            found_subtitles = pool.download_best_subtitles(subtitles_list, video, languages=languages,
-                                                                           hearing_impaired=hearing_impaired,
-                                                                           min_score=user_score,
-                                                                           only_one=not sickbeard.SUBTITLES_MULTI)
-
-                            for subtitle in subtitles_list:
-                                score = subliminal.score.compute_score(subtitle, video, hearing_impaired=sickbeard.SUBTITLES_HEARING_IMPAIRED)
-                                logger.log(u'[{0}] Subtitle score for {1} is: {2} (min={3})'.format
-                                           (subtitle.provider_name, subtitle.id, score, user_score), logger.DEBUG)
-
-                            downloaded_languages = set()
-                            for subtitle in found_subtitles:
-                                logger.log(u'Found subtitle for {0} in {1} provider with language {2}'.format
-                                           (os.path.join(root, filename), subtitle.provider_name,
-                                            subtitle.language.opensubtitles), logger.INFO)
-                                subliminal.save_subtitles(video, found_subtitles, directory=root,
-                                                          single=not sickbeard.SUBTITLES_MULTI)
-
-                                subtitles_multi = not sickbeard.SUBTITLES_MULTI
-                                subtitle_path = subliminal.subtitle.get_subtitle_path(video.name,
-                                                                                      None if subtitles_multi else
-                                                                                      subtitle.language)
-                                if root is not None:
-                                    subtitle_path = os.path.join(root, os.path.split(subtitle_path)[1])
-                                sickbeard.helpers.chmodAsParent(subtitle_path)
-                                sickbeard.helpers.fixSetGroupID(subtitle_path)
-
-                                downloaded_languages.add(subtitle.language.opensubtitles)
-
-                            # Don't run post processor unless at least one file has all of the needed subtitles
-                            if not needs_subtitles(downloaded_languages):
-                                run_post_process = True
-                        except Exception as error:
-                            logger.log(u'Error occurred when downloading subtitles for: {0}. Error: {1}'.format
-                                       (os.path.join(root, filename), ex(error)))
-            if run_post_process:
-                logger.log(u'Starting post-process with default settings now that we found subtitles')
-                processTV.processDir(sickbeard.TV_DOWNLOAD_DIR)
 
     def run(self, force=False):  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
         if not sickbeard.USE_SUBTITLES:
@@ -481,9 +401,6 @@ class SubtitlesFinder(object):
             if minutes == 1:
                 ret = ret.replace('minutes', 'minute')
             return ret.rstrip(', ')
-
-        if sickbeard.SUBTITLES_DOWNLOAD_IN_PP:
-            self.subtitles_download_in_pp()
 
         logger.log(u'Checking for missed subtitles', logger.INFO)
 
@@ -602,8 +519,9 @@ def run_subs_extra_scripts(episode_object, subtitle, video, single=False):
         try:
             process = subprocess.Popen(inner_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, cwd=sickbeard.PROG_DIR)
-            out, _ = process.communicate()  # @UnusedVariable
-            logger.log(u'Script result: {0}'.format(out), logger.DEBUG)
+
+            stdout, stderr_ = process.communicate()
+            logger.log(u'Script result: {0}'.format(stdout), logger.DEBUG)
 
         except Exception as error:
             logger.log(u'Unable to run subs_extra_script: {0}'.format(ex(error)))

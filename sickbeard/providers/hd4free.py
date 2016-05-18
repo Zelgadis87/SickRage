@@ -46,7 +46,7 @@ class HD4FreeProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
         if self.username and self.api_key:
             return True
 
-        logger.log('Your authentication credentials for {0!s} are missing, check your config.'.format(self.name), logger.WARNING)
+        logger.log('Your authentication credentials for {0} are missing, check your config.'.format(self.name), logger.WARNING)
         return False
 
     def search(self, search_strings, age=0, ep_obj=None):  # pylint: disable=too-many-locals, too-many-branches
@@ -82,7 +82,7 @@ class HD4FreeProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
 
                 error_message = jdata.get('error', '')
                 if error_message:
-                    logger.log(u"{}".format(error_message), logger.DEBUG)
+                    logger.log(u"{0}".format(error_message), logger.DEBUG)
                     return results
 
                 try:
@@ -109,10 +109,10 @@ class HD4FreeProvider(TorrentProvider):  # pylint: disable=too-many-instance-att
 
                         torrent_size = str(jdata[i]["size"]) + ' MB'
                         size = convert_size(torrent_size) or -1
-                        item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
+                        item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': ''}
 
                         if mode != 'RSS':
-                            logger.log(u"Found result: {0!s} with {1!s} seeders and {2!s} leechers".format(title, seeders, leechers), logger.DEBUG)
+                            logger.log(u"Found result: {0} with {1} seeders and {2} leechers".format(title, seeders, leechers), logger.DEBUG)
 
                         items.append(item)
                     except StandardError:

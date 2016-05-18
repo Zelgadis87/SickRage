@@ -69,8 +69,40 @@ def hash_napiprojekt(video_path):
     return hashlib.md5(data).hexdigest()
 
 
+def sanitize(string, ignore_characters=None):
+    """Sanitize a string to strip special characters.
+
+    :param str string: the string to sanitize.
+    :param set ignore_characters: characters to ignore.
+    :return: the sanitized string.
+    :rtype: str
+
+    """
+    # only deal with strings
+    if string is None:
+        return
+
+    ignore_characters = ignore_characters or set()
+
+    # replace some characters with one space
+    characters = {'-', ':', '(', ')', '.'} - ignore_characters
+    if characters:
+        string = re.sub('[%s]' % re.escape(''.join(characters)), ' ', string)
+
+    # remove some characters
+    characters = {'\''} - ignore_characters
+    if characters:
+        string = re.sub('[%s]' % re.escape(''.join(characters)), '', string)
+
+    # replace multiple spaces with one
+    string = re.sub('\s+', ' ', string)
+
+    # strip and lower case
+    return string.strip().lower()
+
+
 def sanitize_release_group(string):
-    """Sanitize a string that represents a `release_group` by stripping the square brackets information
+    """Sanitize a `release_group` string to remove content in square brackets.
 
     :param str string: the release group to sanitize.
     :return: the sanitized release group.
@@ -81,33 +113,8 @@ def sanitize_release_group(string):
     if string is None:
         return
 
-    # strip square brackets information
-    string = re.sub('\s*\[\w+\]', '', string)
-
-    # strip and lower case
-    return string.strip().lower()
-
-
-def sanitize(string):
-    """Sanitize a string to strip special characters.
-
-    :param str string: the string to sanitize.
-    :return: the sanitized string.
-    :rtype: str
-
-    """
-    # only deal with strings
-    if string is None:
-        return
-
-    # replace some characters with one space
-    string = re.sub('[-:\(\)\.]', ' ', string)
-
-    # remove some characters
-    string = re.sub('[\']', '', string)
-
-    # replace multiple spaces with one
-    string = re.sub('\s+', ' ', string)
+    # remove content in square brackets
+    string = re.sub('\[\w+\]', '', string)
 
     # strip and lower case
     return string.strip().lower()
