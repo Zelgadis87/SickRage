@@ -165,6 +165,7 @@ class SickRage(object):
         sickbeard.MY_FULLNAME = ek(os.path.normpath, ek(os.path.abspath, __file__))
         sickbeard.MY_NAME = ek(os.path.basename, sickbeard.MY_FULLNAME)
         sickbeard.PROG_DIR = ek(os.path.dirname, sickbeard.MY_FULLNAME)
+        sickbeard.LOCALE_DIR = ek(os.path.join, sickbeard.PROG_DIR, 'locale')
         sickbeard.DATA_DIR = sickbeard.PROG_DIR
         sickbeard.MY_ARGS = sys.argv[1:]
 
@@ -197,7 +198,7 @@ class SickRage(object):
         threading.currentThread().name = 'MAIN'
 
         try:
-            opts, _ = getopt.getopt(
+            opts, args_ = getopt.getopt(
                 sys.argv[1:], 'hqdp::',
                 ['help', 'quiet', 'nolaunch', 'daemon', 'pidfile=', 'port=', 'datadir=', 'config=', 'noresize']
             )
@@ -224,7 +225,7 @@ class SickRage(object):
                 try:
                     self.forced_port = int(value)
                 except ValueError:
-                    sys.exit('Port: {0!s} is not a number. Exiting.'.format(value))
+                    sys.exit('Port: {0} is not a number. Exiting.'.format(value))
 
             # Run as a double forked daemon
             if option in ('-d', '--daemon'):
@@ -243,7 +244,7 @@ class SickRage(object):
 
                 # If the pid file already exists, SickRage may still be running, so exit
                 if ek(os.path.exists, self.pid_file):
-                    sys.exit('PID file: {0!s} already exists. Exiting.'.format(self.pid_file))
+                    sys.exit('PID file: {0} already exists. Exiting.'.format(self.pid_file))
 
             # Specify folder to load the config file from
             if option in ('--config',):
@@ -266,9 +267,9 @@ class SickRage(object):
             if self.run_as_daemon:
                 pid_dir = ek(os.path.dirname, self.pid_file)
                 if not ek(os.access, pid_dir, os.F_OK):
-                    sys.exit('PID dir: {0!s} doesn\'t exist. Exiting.'.format(pid_dir))
+                    sys.exit('PID dir: {0} doesn\'t exist. Exiting.'.format(pid_dir))
                 if not ek(os.access, pid_dir, os.W_OK):
-                    sys.exit('PID dir: {0!s} must be writable (write permissions). Exiting.'.format(pid_dir))
+                    sys.exit('PID dir: {0} must be writable (write permissions). Exiting.'.format(pid_dir))
 
             else:
                 if self.console_logging:
@@ -285,18 +286,18 @@ class SickRage(object):
             try:
                 ek(os.makedirs, sickbeard.DATA_DIR, 0o744)
             except os.error:
-                raise SystemExit('Unable to create data directory: {0!s}'.format(sickbeard.DATA_DIR))
+                raise SystemExit('Unable to create data directory: {0}'.format(sickbeard.DATA_DIR))
 
         # Make sure we can write to the data dir
         if not ek(os.access, sickbeard.DATA_DIR, os.W_OK):
-            raise SystemExit('Data directory must be writeable: {0!s}'.format(sickbeard.DATA_DIR))
+            raise SystemExit('Data directory must be writeable: {0}'.format(sickbeard.DATA_DIR))
 
         # Make sure we can write to the config file
         if not ek(os.access, sickbeard.CONFIG_FILE, os.W_OK):
             if ek(os.path.isfile, sickbeard.CONFIG_FILE):
-                raise SystemExit('Config file must be writeable: {0!s}'.format(sickbeard.CONFIG_FILE))
+                raise SystemExit('Config file must be writeable: {0}'.format(sickbeard.CONFIG_FILE))
             elif not ek(os.access, ek(os.path.dirname, sickbeard.CONFIG_FILE), os.W_OK):
-                raise SystemExit('Config file root dir must be writeable: {0!s}'.format(ek(os.path.dirname, sickbeard.CONFIG_FILE)))
+                raise SystemExit('Config file root dir must be writeable: {0}'.format(ek(os.path.dirname, sickbeard.CONFIG_FILE)))
 
         ek(os.chdir, sickbeard.DATA_DIR)
 
@@ -305,13 +306,13 @@ class SickRage(object):
         if ek(os.path.exists, restore_dir):
             success = self.restore_db(restore_dir, sickbeard.DATA_DIR)
             if self.console_logging:
-                sys.stdout.write('Restore: restoring DB and config.ini {0!s}!\n'.format(('FAILED', 'SUCCESSFUL')[success]))
+                sys.stdout.write('Restore: restoring DB and config.ini {0}!\n'.format(('FAILED', 'SUCCESSFUL')[success]))
 
         # Load the config and publish it to the sickbeard package
         if self.console_logging and not ek(os.path.isfile, sickbeard.CONFIG_FILE):
-            sys.stdout.write('Unable to find {0!s}, all settings will be default!\n'.format(sickbeard.CONFIG_FILE))
+            sys.stdout.write('Unable to find {0}, all settings will be default!\n'.format(sickbeard.CONFIG_FILE))
 
-        sickbeard.CFG = ConfigObj(sickbeard.CONFIG_FILE)
+        sickbeard.CFG = ConfigObj(sickbeard.CONFIG_FILE, encoding='UTF-8')
 
         # Initialize the config and our threads
         sickbeard.initialize(consoleLogging=self.console_logging)
@@ -434,7 +435,7 @@ class SickRage(object):
 
             try:
                 with io.open(self.pid_file, 'w') as f_pid:
-                    f_pid.write('{0!s}\n'.format(pid))
+                    f_pid.write('{0}\n'.format(pid))
             except EnvironmentError as error:
                 logger.log_error_and_exit('Unable to write PID file: {filename} Error {error_num}: {error_message}'.format
                                           (filename=self.pid_file, error_num=error.errno, error_message=error.strerror))
@@ -504,7 +505,7 @@ class SickRage(object):
             for filename in files_list:
                 src_file = ek(os.path.join, src_dir, filename)
                 dst_file = ek(os.path.join, dst_dir, filename)
-                bak_file = ek(os.path.join, dst_dir, '{0!s}.bak-{1!s}'.format(filename, datetime.datetime.now().strftime('%Y%m%d_%H%M%S')))
+                bak_file = ek(os.path.join, dst_dir, '{0}.bak-{1}'.format(filename, datetime.datetime.now().strftime('%Y%m%d_%H%M%S')))
                 if ek(os.path.isfile, dst_file):
                     shutil.move(dst_file, bak_file)
                 shutil.move(src_file, dst_file)

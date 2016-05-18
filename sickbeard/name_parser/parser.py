@@ -93,9 +93,9 @@ class NameParser(object):
         for regexItem in uncompiled_regex:
             for cur_pattern_num, (cur_pattern_name, cur_pattern) in enumerate(regexItem):
                 try:
-                    cur_regex = re.compile(cur_pattern, re.VERBOSE | re.IGNORECASE)
+                    cur_regex = re.compile(cur_pattern, re.VERBOSE | re.I)
                 except re.error, errormsg:
-                    logger.log(u"WARNING: Invalid episode_pattern using {0!s} regexs, {1!s}. {2!s}".format(dbg_str, errormsg, cur_pattern))
+                    logger.log(u"WARNING: Invalid episode_pattern using {0} regexs, {1}. {2}".format(dbg_str, errormsg, cur_pattern))
                 else:
                     self.compiled_regexes.append((cur_pattern_num, cur_pattern_name, cur_regex))
 
@@ -141,7 +141,7 @@ class NameParser(object):
                     result.score += 1
                 else:
                     result.episode_numbers = [ep_num]
-                result.score += 1
+                result.score += 3
 
             if 'ep_ab_num' in named_groups:
                 ep_ab_num = self._convert_number(match.group('ep_ab_num'))
@@ -235,8 +235,7 @@ class NameParser(object):
                     try:
                         lINDEXER_API_PARMS = sickbeard.indexerApi(bestResult.show.indexer).api_params.copy()
 
-                        if bestResult.show.lang:
-                            lINDEXER_API_PARMS['language'] = bestResult.show.lang
+                        lINDEXER_API_PARMS['language'] = bestResult.show.lang or sickbeard.INDEXER_DEFAULT_LANGUAGE
 
                         t = sickbeard.indexerApi(bestResult.show.indexer).indexer(**lINDEXER_API_PARMS)
 

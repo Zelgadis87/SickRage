@@ -139,7 +139,7 @@ class XthorProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
                     torrent_table = html.find("table", class_="table2 table-bordered2")
                     torrent_rows = []
                     if torrent_table:
-                        torrent_rows = torrent_table.find_all("tr")
+                        torrent_rows = torrent_table("tr")
 
                     # Continue only if at least one Release is found
                     if len(torrent_rows) < 2:
@@ -147,11 +147,11 @@ class XthorProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
                         continue
 
                     # Catégorie, Nom du Torrent, (Download), (Bookmark), Com., Taille, Compl�t�, Seeders, Leechers
-                    labels = [process_column_header(label) for label in torrent_rows[0].find_all('td')]
+                    labels = [process_column_header(label) for label in torrent_rows[0]('td')]
 
                     # Skip column headers
                     for row in torrent_rows[1:]:
-                        cells = row.find_all('td')
+                        cells = row('td')
                         if len(cells) < len(labels):
                             continue
 
@@ -168,14 +168,14 @@ class XthorProvider(TorrentProvider):  # pylint: disable=too-many-instance-attri
                             if seeders < self.minseed or leechers < self.minleech:
                                 if mode != 'RSS':
                                     logger.log(u"Discarding torrent because it doesn't meet the"
-                                               u" minimum seeders or leechers: {} (S:{} L:{})".format
+                                               u" minimum seeders or leechers: {0} (S:{1} L:{2})".format
                                                (title, seeders, leechers), logger.DEBUG)
                                 continue
 
                             torrent_size = cells[labels.index('Taille')].get_text()
                             size = convert_size(torrent_size, units=units) or -1
 
-                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': None}
+                            item = {'title': title, 'link': download_url, 'size': size, 'seeders': seeders, 'leechers': leechers, 'hash': ''}
                             if mode != 'RSS':
                                 logger.log(u"Found result: {0} with {1} seeders and {2} leechers".format
                                            (title, seeders, leechers), logger.DEBUG)
