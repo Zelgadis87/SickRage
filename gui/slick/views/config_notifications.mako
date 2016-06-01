@@ -2658,12 +2658,8 @@
                                 <div class="col-lg-9 col-md-8 col-sm-7 col-xs-12 component-desc">
                                     <div class="row">
                                         <div class="col-md-12">
-                                        	<input type="checkbox" class="form-control input-sm" name="trakt_sync_watched" id="trakt_sync_watched" ${('', 'checked="checked"')[bool(sickbeard.TRAKT_SYNC_WATCHED)]}/>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-12">
-                                            <label for="trakt_blacklist_name">${_('Periodically check which episodes you have watched.')}</label>
+                                        	<input type="checkbox" name="trakt_sync_watched" id="trakt_sync_watched" ${('', 'checked="checked"')[bool(sickbeard.TRAKT_SYNC_WATCHED)]}/>
+                                            <label for="trakt_sync_watched">${_('Periodically check which episodes you have watched.')}</label>
                                         </div>
                                     </div>
                                 </div>
