@@ -2116,6 +2116,7 @@ def save_config():  # pylint: disable=too-many-statements, too-many-branches
             'trakt_use_recommended': int(TRAKT_USE_RECOMMENDED),
             'trakt_sync': int(TRAKT_SYNC),
             'trakt_sync_remove': int(TRAKT_SYNC_REMOVE),
+            'trakt_sync_watched': int(TRAKT_SYNC_WATCHED),
             'trakt_default_indexer': int(TRAKT_DEFAULT_INDEXER),
             'trakt_timeout': int(TRAKT_TIMEOUT),
             'trakt_blacklist_name': TRAKT_BLACKLIST_NAME

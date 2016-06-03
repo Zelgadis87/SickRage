@@ -300,7 +300,7 @@
                                             </tr>
 											<tr>
                                                 <td class="showLegend">${_('Stay Ahead')}: </td>
-                                                <td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.scene)]}" alt="${("N", "Y")[bool(show.scene)]}" width="16" height="16" /></td>
+                                                <td>${("Disabled", str(show.stay_ahead) + " ep")[bool(show.stay_ahead > 0)]}</td>
                                             </tr>
                                         </table>
                                     </div>
