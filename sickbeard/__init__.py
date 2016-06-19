@@ -1532,7 +1532,7 @@ def initialize(consoleLogging=True):  # pylint: disable=too-many-locals, too-man
         traktCheckerScheduler = scheduler.Scheduler(
             traktChecker.TraktChecker(),
             run_delay=datetime.timedelta(minutes=5),
-            cycleTime=datetime.timedelta(hours=4),
+            cycleTime=datetime.timedelta(hours=2),
             threadName="TRAKTCHECKER",
             silent=not USE_TRAKT
         )
