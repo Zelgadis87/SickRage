@@ -2002,7 +2002,7 @@ class Home(WebRoot):
             show_obj = Show.find(sickbeard.showList, int(searchThread.show.indexerid))
 
             if not show_obj:
-                logger.log(u'No Show Object found for show with indexerID: ' + str(searchThread.show.indexerid), logger.ERROR)
+                logger.log(u'No Show Object found for show with indexerID: ' + str(searchThread.show.indexerid), logger.WARNING)
                 return results
 
             if isinstance(searchThread, sickbeard.search_queue.ManualSearchQueueItem):
@@ -4805,6 +4805,12 @@ class ConfigProviders(Config):
                         kwargs[curTorrentProvider.get_id() + '_subtitle'])
                 except Exception:
                     curTorrentProvider.subtitle = 0
+
+            if curTorrentProvider.enable_cookies:
+                try:
+                    curTorrentProvider.cookies = str(kwargs['{id}_cookies'.format(id=curTorrentProvider.get_id())]).strip()
+                except Exception:
+                    pass  # I don't want to configure a default value here, as it can also be configured intially as a custom rss torrent provider
 
         for curNzbProvider in [prov for prov in sickbeard.providers.sortedProviderList() if
                                prov.provider_type == GenericProvider.NZB]:
