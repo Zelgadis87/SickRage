@@ -18,15 +18,15 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 # pylint: disable=abstract-method,too-many-lines, R
 
+import ast
+import datetime
+import gettext
 import io
 import os
 import re
 import time
-import urllib
-import datetime
 import traceback
-import gettext
-import ast
+import urllib
 
 try:
     import json
@@ -459,12 +459,8 @@ class WebRoot(WebHandler):
         return self.redirect("/schedule/")
 
     def setScheduleSort(self, sort):
-        if sort not in ('date', 'network', 'show'):
+        if sort not in ('date', 'network', 'show') or sickbeard.COMING_EPS_LAYOUT == 'calendar':
             sort = 'date'
-
-        if sickbeard.COMING_EPS_LAYOUT == 'calendar':
-            sort \
-                = 'date'
 
         sickbeard.COMING_EPS_SORT = sort
 
@@ -476,34 +472,6 @@ class WebRoot(WebHandler):
         results = ComingEpisodes.get_coming_episodes(ComingEpisodes.categories, sickbeard.COMING_EPS_SORT, False)
         today = datetime.datetime.now().replace(tzinfo=network_timezones.sb_timezone)
 
-        submenu = [
-            {
-                'title': _('Sort by:'),
-                'path': {
-                    'Date': 'setScheduleSort/?sort=date',
-                    'Show': 'setScheduleSort/?sort=show',
-                    'Network': 'setScheduleSort/?sort=network',
-                }
-            },
-            {
-                'title': _('Layout:'),
-                'path': {
-                    _('Banner'): 'setScheduleLayout/?layout=banner',
-                    _('Poster'): 'setScheduleLayout/?layout=poster',
-                    _('List'): 'setScheduleLayout/?layout=list',
-                    _('Calendar'): 'setScheduleLayout/?layout=calendar',
-                }
-            },
-            {
-                'title': _('View Paused:'),
-                'path': {
-                    _('Hide'): 'toggleScheduleDisplayPaused'
-                } if sickbeard.COMING_EPS_DISPLAY_PAUSED else {
-                    _('Show'): 'toggleScheduleDisplayPaused'
-                }
-            },
-        ]
-
         # Allow local overriding of layout parameter
         if layout and layout in ('poster', 'banner', 'list', 'calendar'):
             layout = layout
@@ -511,7 +479,7 @@ class WebRoot(WebHandler):
             layout = sickbeard.COMING_EPS_LAYOUT
 
         t = PageTemplate(rh=self, filename='schedule.mako')
-        return t.render(submenu=submenu, next_week=next_week1, today=today, results=results, layout=layout,
+        return t.render(next_week=next_week1, today=today, results=results, layout=layout,
                         title=_('Schedule'), header=_('Schedule'), topmenu='schedule',
                         controller="schedule", action="index")
 
@@ -682,22 +650,43 @@ class Home(WebRoot):
 
         return ep_obj, ''
 
-    def index(self):
+    def index(self, *args, **kwargs):
         t = PageTemplate(rh=self, filename="home.mako")
+
+        selected_root = kwargs.get('root')
+        if selected_root and sickbeard.ROOT_DIRS:
+            backend_pieces = sickbeard.ROOT_DIRS.split('|')
+            backend_dirs = backend_pieces[1:]
+            try:
+                assert selected_root != '-1'
+                selected_root_dir = backend_dirs[int(selected_root)]
+                if selected_root_dir[-1] not in ('/', '\\'):
+                    selected_root_dir += os.sep
+            except (IndexError, ValueError, TypeError, AssertionError):
+                selected_root_dir = ''
+        else:
+            selected_root_dir = ''
+
         if sickbeard.ANIME_SPLIT_HOME:
             shows = []
             anime = []
             for show in sickbeard.showList:
-                if show.is_anime:
-                    anime.append(show)
-                else:
-                    shows.append(show)
+                if selected_root_dir in show._location:
+                    if show.is_anime:
+                        anime.append(show)
+                    else:
+                        shows.append(show)
             showlists = [["Shows", shows], ["Anime", anime]]
         else:
-            showlists = [["Shows", sickbeard.showList]]
+            shows = []
+            for show in sickbeard.showList:
+                if selected_root_dir in show._location:
+                    shows.append(show)
+            showlists = [["Shows", shows]]
 
         stats = self.show_statistics()
-        return t.render(title=_("Home"), header=_("Show List"), topmenu="home", showlists=showlists, show_stat=stats[0], max_download_count=stats[1], controller="home", action="index")
+        return t.render(title=_("Home"), header=_("Show List"), topmenu="home", showlists=showlists, show_stat=stats[
+            0], max_download_count=stats[1], controller="home", action="index", selected_root=selected_root or '-1')
 
     @staticmethod
     def show_statistics():
@@ -891,6 +880,14 @@ class Home(WebRoot):
             return _("Tweet successful, check your twitter to make sure it worked")
         else:
             return _("Error sending tweet")
+
+    @staticmethod
+    def testSlack():
+        result = notifiers.slack_notifier.test_notify()
+        if result:
+            return _("Slack message successful")
+        else:
+            return _("Slack message failed")
 
     @staticmethod
     def testKODI(host=None, username=None, password=None):
@@ -1254,7 +1251,7 @@ class Home(WebRoot):
         )
 
         t = PageTemplate(rh=self, filename="displayShow.mako")
-        submenu = [{'title': _('Edit'), 'path': 'home/editShow?show={0:d}'.format(show_obj.indexerid), 'icon': 'ui-icon ui-icon-pencil'}]
+        submenu = [{'title': _('Edit'), 'path': 'home/editShow?show={0:d}'.format(show_obj.indexerid), 'icon': 'fa fa-pencil'}]
 
         try:
             showLoc = (show_obj.location, True)
@@ -1287,19 +1284,25 @@ class Home(WebRoot):
         if not sickbeard.showQueueScheduler.action.isBeingAdded(show_obj):
             if not sickbeard.showQueueScheduler.action.isBeingUpdated(show_obj):
                 if show_obj.paused:
-                    submenu.append({'title': _('Resume'), 'path': 'home/togglePause?show={0:d}'.format(show_obj.indexerid), 'icon': 'ui-icon ui-icon-play'})
+                    submenu.append({'title': _('Resume'), 'path': 'home/togglePause?show={0:d}'.format(show_obj.indexerid), 'icon': 'fa fa-play'})
                 else:
-                    submenu.append({'title': _('Pause'), 'path': 'home/togglePause?show={0:d}'.format(show_obj.indexerid), 'icon': 'ui-icon ui-icon-pause'})
+                    submenu.append({'title': _('Pause'), 'path': 'home/togglePause?show={0:d}'.format(show_obj.indexerid), 'icon': 'fa fa-pause'})
 
-                submenu.append({'title': _('Remove'), 'path': 'home/deleteShow?show={0:d}'.format(show_obj.indexerid), 'class': 'removeshow', 'confirm': True, 'icon': 'ui-icon ui-icon-trash'})
-                submenu.append({'title': _('Re-scan files'), 'path': 'home/refreshShow?show={0:d}'.format(show_obj.indexerid), 'icon': 'ui-icon ui-icon-refresh'})
-                submenu.append({'title': _('Force Full Update'), 'path': 'home/updateShow?show={0:d}&amp;force=1'.format(show_obj.indexerid), 'icon': 'ui-icon ui-icon-transfer-e-w'})
+                submenu.append({'title': _('Remove'), 'path': 'home/deleteShow?show={0:d}'.format(show_obj.indexerid), 'class': 'removeshow', 'confirm': True, 'icon': 'fa fa-trash'})
+                submenu.append({'title': _('Re-scan files'), 'path': 'home/refreshShow?show={0:d}'.format(show_obj.indexerid), 'icon': 'fa fa-refresh'})
+                submenu.append({'title': _('Force Full Update'), 'path': 'home/updateShow?show={0:d}&amp;force=1'.format(show_obj.indexerid), 'icon': 'fa fa-exchange'})
                 submenu.append({'title': _('Update show in KODI'), 'path': 'home/updateKODI?show={0:d}'.format(show_obj.indexerid), 'requires': self.haveKODI(), 'icon': 'menu-icon-kodi'})
                 submenu.append({'title': _('Update show in Emby'), 'path': 'home/updateEMBY?show={0:d}'.format(show_obj.indexerid), 'requires': self.haveEMBY(), 'icon': 'menu-icon-emby'})
-                submenu.append({'title': _('Preview Rename'), 'path': 'home/testRename?show={0:d}'.format(show_obj.indexerid), 'icon': 'ui-icon ui-icon-tag'})
+                if seasonResults and int(seasonResults[-1]["season"]) == 0:
+                    if sickbeard.DISPLAY_SHOW_SPECIALS:
+                        submenu.append({'title': _('Hide specials'), 'path': 'home/toggleDisplayShowSpecials/?show={0:d}'.format(show_obj.indexerid), 'confirm': True, 'icon': 'fa fa-times'})
+                    else:
+                        submenu.append({'title': _('Show specials'), 'path': 'home/toggleDisplayShowSpecials/?show={0:d}'.format(show_obj.indexerid), 'confirm': True, 'icon': 'fa fa-check'})
+
+                submenu.append({'title': _('Preview Rename'), 'path': 'home/testRename?show={0:d}'.format(show_obj.indexerid), 'icon': 'fa fa-tag'})
 
                 if sickbeard.USE_SUBTITLES and show_obj.subtitles and not sickbeard.showQueueScheduler.action.isBeingSubtitled(show_obj):
-                    submenu.append({'title': _('Download Subtitles'), 'path': 'home/subtitleShow?show={0:d}'.format(show_obj.indexerid), 'icon': 'menu-icon-backlog'})
+                    submenu.append({'title': _('Download Subtitles'), 'path': 'home/subtitleShow?show={0:d}'.format(show_obj.indexerid), 'icon': 'fa fa-language'})
 
         epCounts = {
             Overview.SKIPPED: 0,
@@ -1330,11 +1333,14 @@ class Home(WebRoot):
                     anime.append(show)
                 else:
                     shows.append(show)
-            sortedShowLists = [["Shows", sorted(shows, lambda x, y: cmp(titler(x.name), titler(y.name)))],
-                               ["Anime", sorted(anime, lambda x, y: cmp(titler(x.name), titler(y.name)))]]
+            sortedShowLists = [
+                ["Shows", sorted(shows, lambda x, y: cmp(titler(x.name).lower(), titler(y.name).lower()))],
+                ["Anime", sorted(anime, lambda x, y: cmp(titler(x.name).lower(), titler(y.name).lower()))]
+            ]
         else:
             sortedShowLists = [
-                ["Shows", sorted(sickbeard.showList, lambda x, y: cmp(titler(x.name), titler(y.name)))]]
+                ["Shows", sorted(sickbeard.showList, lambda x, y: cmp(titler(x.name).lower(), titler(y.name).lower()))]
+            ]
 
         bwl = None
         if show_obj.is_anime:
@@ -2091,12 +2097,35 @@ class Home(WebRoot):
 
         if new_subtitles:
             new_languages = [subtitle_module.name_from_code(code) for code in new_subtitles]
-            status = _('New subtitles downloaded: {new_subtitle_languages}').format(new_subtitle_languages=', '.join(new_languages))
+            status = _('New subtitles downloaded: {new_subtitle_languages}').format(
+                new_subtitle_languages=', '.join(new_languages))
         else:
             status = _('No subtitles downloaded')
 
         ui.notifications.message(ep_obj.show.name, status)  # pylint: disable=no-member
         return json.dumps({'result': status, 'subtitles': ','.join(ep_obj.subtitles)})  # pylint: disable=no-member
+
+    def retrySearchSubtitles(self, show, season, episode, lang):
+        # retrieve the episode object and fail if we can't get one
+        ep_obj, error_msg = self._getEpisode(show, season, episode)
+        if error_msg or not ep_obj:
+            return json.dumps({'result': 'failure', 'errorMessage': error_msg})
+
+        try:
+            new_subtitles = ep_obj.download_subtitles(force_lang=lang)
+        except Exception as ex:
+            return json.dumps({'result': 'failure', 'errorMessage': ex.message})
+
+        if new_subtitles:
+            new_languages = [subtitle_module.name_from_code(code) for code in new_subtitles]
+            status = _('New subtitles downloaded: {new_subtitle_languages}').format(
+                new_subtitle_languages=', '.join(new_languages))
+        else:
+            status = _('No subtitles downloaded')
+
+        ui.notifications.message(ep_obj.show.name, status)
+        return json.dumps({'result': status, 'subtitles': ','.join(ep_obj.subtitles)})
+
 
     def setSceneNumbering(self, show, indexer, forSeason=None, forEpisode=None, forAbsolute=None, sceneSeason=None,
                           sceneEpisode=None, sceneAbsolute=None):
@@ -2883,11 +2912,12 @@ class HomeAddShows(Home):
 
         return indexer, show_dir, indexer_id, show_name
 
-    def addExistingShows(self, shows_to_add=None, promptForSettings=None):
+    def addExistingShows(self, shows_to_add, promptForSettings, **kwargs):
         """
         Receives a dir list and add them. Adds the ones with given TVDB IDs first, then forwards
         along to the newShow page.
         """
+
         # grab a list of other shows to add, if provided
         if not shows_to_add:
             shows_to_add = []
@@ -3703,8 +3733,8 @@ class History(WebRoot):
 
         t = PageTemplate(rh=self, filename="history.mako")
         submenu = [
-            {'title': _('Clear History'), 'path': 'history/clearHistory', 'icon': 'ui-icon ui-icon-trash', 'class': 'clearhistory', 'confirm': True},
-            {'title': _('Trim History'), 'path': 'history/trimHistory', 'icon': 'menu-icon-cut', 'class': 'trimhistory', 'confirm': True},
+            {'title': _('Clear History'), 'path': 'history/clearHistory', 'icon': 'fa fa-trash', 'class': 'clearhistory', 'confirm': True},
+            {'title': _('Trim History'), 'path': 'history/trimHistory', 'icon': 'fa fa-scissors', 'class': 'trimhistory', 'confirm': True},
         ]
 
         return t.render(historyResults=data, compactResults=compact, limit=limit,
@@ -3734,14 +3764,14 @@ class Config(WebRoot):
     @staticmethod
     def ConfigMenu():
         menu = [
-            {'title': _('General'), 'path': 'config/general/', 'icon': 'menu-icon-config'},
-            {'title': _('Backup/Restore'), 'path': 'config/backuprestore/', 'icon': 'menu-icon-backup'},
-            {'title': _('Search Settings'), 'path': 'config/search/', 'icon': 'menu-icon-manage-searches'},
-            {'title': _('Search Providers'), 'path': 'config/providers/', 'icon': 'menu-icon-provider'},
-            {'title': _('Subtitles Settings'), 'path': 'config/subtitles/', 'icon': 'menu-icon-backlog'},
-            {'title': _('Post Processing'), 'path': 'config/postProcessing/', 'icon': 'menu-icon-postprocess'},
-            {'title': _('Notifications'), 'path': 'config/notifications/', 'icon': 'menu-icon-notification'},
-            {'title': _('Anime'), 'path': 'config/anime/', 'icon': 'menu-icon-anime'},
+            {'title': _('General'), 'path': 'config/general/', 'icon': 'fa fa-cog'},
+            {'title': _('Backup/Restore'), 'path': 'config/backuprestore/', 'icon': 'fa fa-floppy-o'},
+            {'title': _('Search Settings'), 'path': 'config/search/', 'icon': 'fa fa-search'},
+            {'title': _('Search Providers'), 'path': 'config/providers/', 'icon': 'fa fa-plug'},
+            {'title': _('Subtitles Settings'), 'path': 'config/subtitles/', 'icon': 'fa fa-language'},
+            {'title': _('Post Processing'), 'path': 'config/postProcessing/', 'icon': 'fa fa-refresh'},
+            {'title': _('Notifications'), 'path': 'config/notifications/', 'icon': 'fa fa-bell-o'},
+            {'title': _('Anime'), 'path': 'config/anime/', 'icon': 'fa fa-eye'},
         ]
 
         return menu
@@ -4933,7 +4963,7 @@ class ConfigNotifications(Config):
             use_email=None, email_notify_onsnatch=None, email_notify_ondownload=None,
             email_notify_onsubtitledownload=None, email_host=None, email_port=25, email_from=None,
             email_tls=None, email_user=None, email_password=None, email_list=None, email_subject=None, email_show_list=None,
-            email_show=None):
+            email_show=None, use_slack=False, slack_notify_snatch=None, slack_notify_download=None, slack_webhook=None):
 
         results = []
 
@@ -5012,6 +5042,11 @@ class ConfigNotifications(Config):
         sickbeard.TWITTER_NOTIFY_ONSUBTITLEDOWNLOAD = config.checkbox_to_value(twitter_notify_onsubtitledownload)
         sickbeard.TWITTER_USEDM = config.checkbox_to_value(twitter_usedm)
         sickbeard.TWITTER_DMTO = twitter_dmto
+
+        sickbeard.USE_SLACK = config.checkbox_to_value(use_slack)
+        sickbeard.SLACK_NOTIFY_SNATCH = config.checkbox_to_value(slack_notify_snatch)
+        sickbeard.SLACK_NOTIFY_DOWNLOAD = config.checkbox_to_value(slack_notify_download)
+        sickbeard.SLACK_WEBHOOK = slack_webhook
 
         sickbeard.USE_BOXCAR2 = config.checkbox_to_value(use_boxcar2)
         sickbeard.BOXCAR2_NOTIFY_ONSNATCH = config.checkbox_to_value(boxcar2_notify_onsnatch)
