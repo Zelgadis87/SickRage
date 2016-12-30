@@ -119,6 +119,10 @@ class ShowQueue(generic_queue.GenericQueue):
                 logger.DEBUG)
             return
 
+        if force == False and show.paused:
+            logger.log('Skipping show [{0}] because is paused.'.format(show.name), logger.DEBUG)
+            return
+
         logger.log('Queueing show refresh for {0}'.format(show.name), logger.DEBUG)
 
         queueItemObj = QueueItemRefresh(show, force=force)
@@ -531,6 +535,7 @@ class QueueItemRefresh(ShowQueueItem):
         self.force = force
 
     def run(self):
+
         ShowQueueItem.run(self)
 
         logger.log('Performing refresh on {0}'.format(self.show.name))
