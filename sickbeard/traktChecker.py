@@ -361,7 +361,7 @@ class TraktChecker(object):
 
             if sickbeard.showList:
                 for show in sickbeard.showList:
-                    if show.status == "Ended":
+                    if show.status in ("Ended", "Canceled"):
                         if not show.imdbid:
                             logger.log(u'Could not check trakt progress for {0} because the imdb id is missing from tvdb data, skipping'.format
                                        (show.name), logger.WARNING)
@@ -385,6 +385,7 @@ class TraktChecker(object):
     def updateShows(self):
         logger.log(u"SHOW_WATCHLIST::CHECK::START - Trakt Show Watchlist", logger.DEBUG)
 
+        self._getShowWatchlist()
         if not self.ShowWatchlist:
             logger.log(u"No shows found in your watchlist, aborting watchlist update", logger.DEBUG)
             return
@@ -417,6 +418,7 @@ class TraktChecker(object):
         """
         logger.log(u"SHOW_WATCHLIST::CHECK::START - Trakt Episode Watchlist", logger.DEBUG)
 
+        self._getEpisodeWatchlist()
         if not self.EpisodeWatchlist:
             logger.log(u"No episode found in your watchlist, aborting episode update", logger.DEBUG)
             return

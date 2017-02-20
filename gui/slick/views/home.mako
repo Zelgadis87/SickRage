@@ -19,9 +19,13 @@
     <%namespace file="/inc_defs.mako" import="renderQualityPill"/>
 
     <div class="row">
-        <div class="col-lg-9 col-md-${'12' if(sickbeard.HOME_LAYOUT == 'poster') else '9'} col-sm-${'12' if(sickbeard.HOME_LAYOUT == 'poster') else '8'} col-xs-12 pull-right">
-            <div class="pull-right">
-
+        <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12 tex-center">
+            <div class="text-center">
+                % if sickbeard.HOME_LAYOUT == 'poster':
+                    <span class="show-option">
+                        <input id="filterShowName" class="form-control form-control-inline input-sm input200" type="search" placeholder="${_('Filter Show Name')}">
+                    </span>
+                % endif
                 % if sickbeard.ROOT_DIRS:
                     <span class="show-option">${_('Root')}:</span>
                     <label>
@@ -39,12 +43,19 @@
                     <span class="show-option">
                         <button type="button" class="resetsorting btn btn-inline">${_('Clear Filter(s)')}</button>
                     </span>
-                        <span class="show-option">
+                    <span class="show-option">
                         <button id="popover" type="button" class="btn btn-inline">${_('Select Columns')} <b class="caret"></b></button>
                     </span>
-                    &nbsp;
                 % endif
-
+                <label>
+                    <span class="show-option">${_('Layout')}:</span>
+                    <select name="layout" class="form-control form-control-inline input-sm" onchange="location = this.options[this.selectedIndex].value;" title="Layout">
+                        <option value="${srRoot}/setHomeLayout/?layout=poster" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'poster']}>${_('Poster')}</option>
+                        <option value="${srRoot}/setHomeLayout/?layout=small" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'small']}>${_('Small Poster')}</option>
+                        <option value="${srRoot}/setHomeLayout/?layout=banner" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'banner']}>${_('Banner')}</option>
+                        <option value="${srRoot}/setHomeLayout/?layout=simple" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'simple']}>${_('Simple')}</option>
+                    </select>
+                </label>
                 % if sickbeard.HOME_LAYOUT == 'poster':
                     <label>
                         <span class="show-option">${_('Sort By')}:</span>
@@ -56,7 +67,6 @@
                             <option value="network" data-sort="${srRoot}/setPosterSortBy/?sort=network" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'network']}>${_('Network')}</option>
                             <option value="progress" data-sort="${srRoot}/setPosterSortBy/?sort=progress" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'progress']}>${_('Progress')}</option>
                         </select>
-                        &nbsp;
                     </label>
 
                     <label>
@@ -65,38 +75,13 @@
                             <option value="true" data-sort="${srRoot}/setPosterSortDir/?direction=1" ${('', 'selected="selected"')[sickbeard.POSTER_SORTDIR == 1]}>${_('Ascending')} </option>
                             <option value="false" data-sort="${srRoot}/setPosterSortDir/?direction=0" ${('', 'selected="selected"')[sickbeard.POSTER_SORTDIR == 0]}>${_('Descending')}</option>
                         </select>
-                        &nbsp;
                     </label>
-
-                    <span class="show-option">
-                        <input id="filterShowName" class="form-control form-control-inline input-sm input200" type="search" placeholder="${_('Filter Show Name')}">
-                    </span>
-
                     <label>
                         <span class="show-option">${_('Poster Size')}:</span>
                         <div style="width: 100px; display: inline-block; margin-left: 7px;" id="posterSizeSlider"></div>
-                        &nbsp;
                     </label>
                 % endif
-
-                <label>
-                    <span class="show-option">${_('Layout')}:</span>
-                    <select name="layout" class="form-control form-control-inline input-sm" onchange="location = this.options[this.selectedIndex].value;" title="Layout">
-                        <option value="${srRoot}/setHomeLayout/?layout=poster" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'poster']}>${_('Poster')}</option>
-                        <option value="${srRoot}/setHomeLayout/?layout=small" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'small']}>${_('Small Poster')}</option>
-                        <option value="${srRoot}/setHomeLayout/?layout=banner" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'banner']}>${_('Banner')}</option>
-                        <option value="${srRoot}/setHomeLayout/?layout=simple" ${('', 'selected="selected"')[sickbeard.HOME_LAYOUT == 'simple']}>${_('Simple')}</option>
-                    </select>
-                </label>
-
             </div>
-        </div>
-        <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12">
-            % if not header is UNDEFINED:
-                <h1 class="header">${header}</h1>
-            % else:
-                <h1 class="title">${title}</h1>
-            % endif
         </div>
     </div>
 
@@ -362,7 +347,7 @@
                                                     den = cur_total
                                                 else:
                                                     den = 1
-                                                download_stat_tip = _('Unaired')
+                                                    download_stat_tip = _('Unaired')
 
                                                 progressbar_percent = nom * 100 / den
                                             %>

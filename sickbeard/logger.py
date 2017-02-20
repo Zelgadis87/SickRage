@@ -239,7 +239,10 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
         if level == ERROR:
             self.logger.exception(message, *args, **kwargs)
         else:
-            self.logger.log(level, message, *args, **kwargs)
+            try:
+                self.logger.log(level, message, *args, **kwargs)
+            except:
+                print msg
 
     def log_error_and_exit(self, error_msg, *args, **kwargs):
         self.log(error_msg, ERROR, *args, **kwargs)
@@ -279,19 +282,19 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
 
         try:
             # read log file
-            log_data = None
+            __log_data = None
 
             if ek(os.path.isfile, self.log_file):
                 with io.open(self.log_file, encoding='utf-8') as log_f:
-                    log_data = log_f.readlines()
+                    __log_data = log_f.readlines()
 
             for i in range(1, int(sickbeard.LOG_NR)):
                 f_name = '{0}.{1:d}'.format(self.log_file, i)
-                if ek(os.path.isfile, f_name) and (len(log_data) <= 500):
+                if ek(os.path.isfile, f_name) and (len(__log_data) <= 500):
                     with io.open(f_name, encoding='utf-8') as log_f:
-                        log_data += log_f.readlines()
+                        __log_data += log_f.readlines()
 
-            log_data = [line for line in reversed(log_data)]
+            __log_data = list(reversed(__log_data))
 
             # parse and submit errors to issue tracker
             for cur_error in sorted(classes.ErrorViewer.errors, key=lambda error: error.time, reverse=True)[:500]:
@@ -309,12 +312,12 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
 
                 gist = None
                 regex = r'^({0})\s+([A-Z]+)\s+([0-9A-Z\-]+)\s*(.*)(?: \[[\w]{{7}}\])$'.format(cur_error.time)
-                for i, data in enumerate(log_data):
+                for i, data in enumerate(__log_data):
                     match = re.match(regex, data)
                     if match:
                         level = match.group(2)
                         if LOGGING_LEVELS[level] == ERROR:
-                            paste_data = ''.join(log_data[i:i + 50])
+                            paste_data = ''.join(__log_data[i:i + 50])
                             if paste_data:
                                 gist = sickbeard.gh.get_user().create_gist(False, {'sickrage.log': InputFileContent(paste_data)})
                             break
@@ -421,5 +424,111 @@ class Wrapper(object):
 _globals = sys.modules[__name__] = Wrapper(sys.modules[__name__])  # pylint: disable=invalid-name
 
 
+def init_logging(*args, **kwargs):
+    return Wrapper.instance.init_logging(*args, **kwargs)
+
+
 def log(*args, **kwargs):
     return Wrapper.instance.log(*args, **kwargs)
+
+
+def log_error_and_exit(*args, **kwargs):
+    return Wrapper.instance.log_error_and_exit(*args, **kwargs)
+
+
+def set_level(*args, **kwargs):
+    return Wrapper.instance.set_level(*args, **kwargs)
+
+
+def shutdown():
+    return Wrapper.instance.shutdown()
+
+
+def submit_errors(*args, **kwargs):
+    return Wrapper.instance.submit_errors(*args, **kwargs)
+
+log_file = Wrapper.instance.log_file
+
+LOG_FILTERS = {
+    '<NONE>': _(u'&lt;No Filter&gt;'),
+    'DAILYSEARCHER': _(u'Daily Searcher'),
+    'BACKLOG': _(u'Backlog'),
+    'SHOWUPDATER': _(u'Show Updater'),
+    'CHECKVERSION': _(u'Check Version'),
+    'SHOWQUEUE': _(u'Show Queue'),
+    'SEARCHQUEUE': _(u'Search Queue (All)'),
+    'SEARCHQUEUE-DAILY-SEARCH': _(u'Search Queue (Daily Searcher)'),
+    'SEARCHQUEUE-BACKLOG': _(u'Search Queue (Backlog)'),
+    'SEARCHQUEUE-MANUAL': _(u'Search Queue (Manual)'),
+    'SEARCHQUEUE-RETRY': _(u'Search Queue (Retry/Failed)'),
+    'SEARCHQUEUE-RSS': _(u'Search Queue (RSS)'),
+    'FINDPROPERS': _(u'Find Propers'),
+    'POSTPROCESSOR': _(u'Postprocessor'),
+    'FINDSUBTITLES': _(u'Find Subtitles'),
+    'TRAKTCHECKER': _(u'Trakt Checker'),
+    'EVENT': _(u'Event'),
+    'ERROR': _(u'Error'),
+    'TORNADO': _(u'Tornado'),
+    'Thread': _(u'Thread'),
+    'MAIN': _(u'Main'),
+}
+
+
+def log_data(min_level, log_filter, log_search, max_lines):
+    regex = r"^(\d\d\d\d)\-(\d\d)\-(\d\d)\s*(\d\d)\:(\d\d):(\d\d)\s*([A-Z]+)\s*(.+?)\s*\:\:\s*(.*)$"
+    if log_filter not in LOG_FILTERS:
+        log_filter = '<NONE>'
+
+    final_data = []
+
+    log_files = []
+    if ek(os.path.isfile, Wrapper.instance.log_file):
+        log_files.append(Wrapper.instance.log_file)
+
+        for i in range(1, int(sickbeard.LOG_NR)):
+            name = Wrapper.instance.log_file + "." + str(i)
+            if not ek(os.path.isfile, name):
+                break
+            log_files.append(name)
+    else:
+        return final_data
+
+    data = []
+    for _log_file in log_files:
+        if len(data) < max_lines:
+            with io.open(_log_file, 'r', encoding='utf-8') as f:
+                data += [line for line in reversed(f.readlines())]
+        else:
+            break
+
+    found_lines = 0
+    for x in data:
+        match = re.match(regex, x)
+
+        if match:
+            level = match.group(7)
+            log_name = match.group(8)
+
+            if not sickbeard.DEBUG and level == 'DEBUG':
+                continue
+
+            if not sickbeard.DBDEBUG and level == 'DB':
+                continue
+
+            if level not in LOGGING_LEVELS:
+                final_data.append('AA ' + x)
+                found_lines += 1
+            elif log_search and log_search.lower() in x.lower():
+                final_data.append(x)
+                found_lines += 1
+            elif not log_search and LOGGING_LEVELS[level] >= int(min_level) and (log_filter == '<NONE>' or log_name.startswith(log_filter)):
+                final_data.append(x)
+                found_lines += 1
+        else:
+            final_data.append('AA ' + x)
+            found_lines += 1
+
+        if found_lines >= max_lines:
+            break
+
+    return final_data

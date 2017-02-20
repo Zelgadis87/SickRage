@@ -18,12 +18,10 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-import re
 from requests.utils import dict_from_cookiejar
 
 from sickbeard import logger, tvcache
 from sickbeard.bs4_parser import BS4Parser
-
 from sickrage.helper.common import convert_size, try_int
 from sickrage.providers.torrent.TorrentProvider import TorrentProvider
 
@@ -67,7 +65,7 @@ class SceneTimeProvider(TorrentProvider):  # pylint: disable=too-many-instance-a
             login_params = {'username': self.username, 'password': self.password}
 
             response = self.get_url(self.urls['login'], post_data=login_params, returns='response')
-            if response.status_code != 200:
+            if not response or response.status_code != 200:
                 logger.log(u"Unable to connect to provider", logger.WARNING)
                 return False
 
