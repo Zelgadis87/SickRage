@@ -187,10 +187,6 @@ class SickRage(object):
         sickbeard.DATA_DIR = ek(os.path.abspath, args.datadir) if args.datadir else sickbeard.DATA_DIR
         sickbeard.CONFIG_FILE = ek(os.path.abspath, args.config) if args.config else ek(os.path.join, sickbeard.DATA_DIR, 'config.ini')
 
-            if option in ('--locale',):
-                # set the given locale for the time settings.
-                locale.setlocale(locale.LC_TIME, str(value))
-
         # The pid file is only useful in daemon mode, make sure we can write the file properly
         if self.create_pid:
             if self.run_as_daemon:
