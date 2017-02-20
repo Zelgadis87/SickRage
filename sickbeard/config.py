@@ -54,7 +54,7 @@ naming_sep_type = (" - ", " ")
 naming_sep_type_text = (" - ", "space")
 
 
-def change_HTTPS_CERT(https_cert):
+def change_https_cert(https_cert):
     """
     Replace HTTPS Certificate file path
 
@@ -75,14 +75,14 @@ def change_HTTPS_CERT(https_cert):
     return True
 
 
-def change_HTTPS_KEY(https_key):
+def change_https_key(https_key):
     """
     Replace HTTPS Key file path
 
     :param https_key: path to the new key file
     :return: True on success, False on failure
     """
-    if https_key == '':
+    if not https_key:
         sickbeard.HTTPS_KEY = ''
         return True
 
@@ -96,7 +96,28 @@ def change_HTTPS_KEY(https_key):
     return True
 
 
-def change_LOG_DIR(log_dir, web_log):
+def change_sickrage_background(background):
+    """
+    Replace HTTPS Key file path
+
+    :param background: path to the new background image
+    :return: True on success, False on failure
+    """
+    if not background:
+        sickbeard.SICKRAGE_BACKGROUND_PATH = ''
+        return True
+
+    background = ek(os.path.normpath, background)
+    if not ek(os.path.exists, background):
+        logger.log(u"Background image does not exist: {0}".format(background))
+        return False
+
+    sickbeard.SICKRAGE_BACKGROUND_PATH = background
+
+    return True
+
+
+def change_log_dir(log_dir, web_log):
     """
     Change logging directory for application and webserver
 
@@ -126,7 +147,7 @@ def change_LOG_DIR(log_dir, web_log):
     return True
 
 
-def change_NZB_DIR(nzb_dir):
+def change_nzb_dir(nzb_dir):
     """
     Change NZB Folder
 
@@ -147,7 +168,7 @@ def change_NZB_DIR(nzb_dir):
     return True
 
 
-def change_TORRENT_DIR(torrent_dir):
+def change_torrent_dir(torrent_dir):
     """
     Change torrent directory
 
@@ -168,7 +189,7 @@ def change_TORRENT_DIR(torrent_dir):
     return True
 
 
-def change_TV_DOWNLOAD_DIR(tv_download_dir):
+def change_tv_download_dir(tv_download_dir):
     """
     Change TV_DOWNLOAD directory (used by postprocessor)
 
@@ -189,22 +210,22 @@ def change_TV_DOWNLOAD_DIR(tv_download_dir):
     return True
 
 
-def change_AUTOPOSTPROCESSER_FREQUENCY(freq):
+def change_postprocessor_frequency(freq):
     """
     Change frequency of automatic postprocessing thread
     TODO: Make all thread frequency changers in config.py return True/False status
 
     :param freq: New frequency
     """
-    sickbeard.AUTOPOSTPROCESSER_FREQUENCY = try_int(freq, sickbeard.DEFAULT_AUTOPOSTPROCESSER_FREQUENCY)
+    sickbeard.AUTOPOSTPROCESSOR_FREQUENCY = try_int(freq, sickbeard.DEFAULT_AUTOPOSTPROCESSOR_FREQUENCY)
 
-    if sickbeard.AUTOPOSTPROCESSER_FREQUENCY < sickbeard.MIN_AUTOPOSTPROCESSER_FREQUENCY:
-        sickbeard.AUTOPOSTPROCESSER_FREQUENCY = sickbeard.MIN_AUTOPOSTPROCESSER_FREQUENCY
+    if sickbeard.AUTOPOSTPROCESSOR_FREQUENCY < sickbeard.MIN_AUTOPOSTPROCESSOR_FREQUENCY:
+        sickbeard.AUTOPOSTPROCESSOR_FREQUENCY = sickbeard.MIN_AUTOPOSTPROCESSOR_FREQUENCY
 
-    sickbeard.autoPostProcesserScheduler.cycleTime = datetime.timedelta(minutes=sickbeard.AUTOPOSTPROCESSER_FREQUENCY)
+    sickbeard.autoPostProcessorScheduler.cycleTime = datetime.timedelta(minutes=sickbeard.AUTOPOSTPROCESSOR_FREQUENCY)
 
 
-def change_DAILYSEARCH_FREQUENCY(freq):
+def change_daily_search_frequency(freq):
     """
     Change frequency of daily search thread
 
@@ -218,7 +239,7 @@ def change_DAILYSEARCH_FREQUENCY(freq):
     sickbeard.dailySearchScheduler.cycleTime = datetime.timedelta(minutes=sickbeard.DAILYSEARCH_FREQUENCY)
 
 
-def change_BACKLOG_FREQUENCY(freq):
+def change_backlog_frequency(freq):
     """
     Change frequency of backlog thread
 
@@ -233,7 +254,7 @@ def change_BACKLOG_FREQUENCY(freq):
     sickbeard.backlogSearchScheduler.cycleTime = datetime.timedelta(minutes=sickbeard.BACKLOG_FREQUENCY)
 
 
-def change_UPDATE_FREQUENCY(freq):
+def change_update_frequency(freq):
     """
     Change frequency of daily updater thread
 
@@ -247,7 +268,7 @@ def change_UPDATE_FREQUENCY(freq):
     sickbeard.versionCheckScheduler.cycleTime = datetime.timedelta(hours=sickbeard.UPDATE_FREQUENCY)
 
 
-def change_SHOWUPDATE_HOUR(freq):
+def change_showupdate_hour(freq):
     """
     Change frequency of show updater thread
 
@@ -263,7 +284,7 @@ def change_SHOWUPDATE_HOUR(freq):
     sickbeard.showUpdateScheduler.start_time = datetime.time(hour=sickbeard.SHOWUPDATE_HOUR)
 
 
-def change_SUBTITLES_FINDER_FREQUENCY(subtitles_finder_frequency):
+def change_subtitle_finder_frequency(subtitles_finder_frequency):
     """
     Change frequency of subtitle thread
 
@@ -275,7 +296,7 @@ def change_SUBTITLES_FINDER_FREQUENCY(subtitles_finder_frequency):
     sickbeard.SUBTITLES_FINDER_FREQUENCY = try_int(subtitles_finder_frequency, 1)
 
 
-def change_VERSION_NOTIFY(version_notify):
+def change_version_notify(version_notify):
     """
     Change frequency of versioncheck thread
 
@@ -285,14 +306,11 @@ def change_VERSION_NOTIFY(version_notify):
 
     sickbeard.VERSION_NOTIFY = version_notify
 
-    if not version_notify:
-        sickbeard.NEWEST_VERSION_STRING = None
-
     if oldSetting is False and version_notify is True:
         sickbeard.versionCheckScheduler.forceRun()
 
 
-def change_DOWNLOAD_PROPERS(download_propers):
+def change_download_propers(download_propers):
     """
     Enable/Disable proper download thread
     TODO: Make this return True/False on success/failure
@@ -318,7 +336,7 @@ def change_DOWNLOAD_PROPERS(download_propers):
         logger.log(u"Stopping PROPERFINDER thread", logger.INFO)
 
 
-def change_USE_TRAKT(use_trakt):
+def change_use_trakt(use_trakt):
     """
     Enable/disable trakt thread
     TODO: Make this return true/false on success/failure
@@ -344,7 +362,7 @@ def change_USE_TRAKT(use_trakt):
         logger.log(u"Stopping TRAKTCHECKER thread", logger.INFO)
 
 
-def change_USE_SUBTITLES(use_subtitles):
+def change_use_subtitles(use_subtitles):
     """
     Enable/Disable subtitle searcher
     TODO: Make this return true/false on success/failure
@@ -370,7 +388,7 @@ def change_USE_SUBTITLES(use_subtitles):
         logger.log(u"Stopping SUBTITLESFINDER thread", logger.INFO)
 
 
-def change_PROCESS_AUTOMATICALLY(process_automatically):
+def change_process_automatically(process_automatically):
     """
     Enable/Disable postprocessor thread
     TODO: Make this return True/False on success/failure
@@ -384,16 +402,16 @@ def change_PROCESS_AUTOMATICALLY(process_automatically):
 
     sickbeard.PROCESS_AUTOMATICALLY = process_automatically
     if sickbeard.PROCESS_AUTOMATICALLY:
-        if not sickbeard.autoPostProcesserScheduler.enable:
-            logger.log(u"Starting POSTPROCESSER thread", logger.INFO)
-            sickbeard.autoPostProcesserScheduler.silent = False
-            sickbeard.autoPostProcesserScheduler.enable = True
+        if not sickbeard.autoPostProcessorScheduler.enable:
+            logger.log(u"Starting POSTPROCESSOR thread", logger.INFO)
+            sickbeard.autoPostProcessorScheduler.silent = False
+            sickbeard.autoPostProcessorScheduler.enable = True
         else:
-            logger.log(u"Unable to start POSTPROCESSER thread. Already running", logger.INFO)
+            logger.log(u"Unable to start POSTPROCESSOR thread. Already running", logger.INFO)
     else:
-        logger.log(u"Stopping POSTPROCESSER thread", logger.INFO)
-        sickbeard.autoPostProcesserScheduler.enable = False
-        sickbeard.autoPostProcesserScheduler.silent = True
+        logger.log(u"Stopping POSTPROCESSOR thread", logger.INFO)
+        sickbeard.autoPostProcessorScheduler.enable = False
+        sickbeard.autoPostProcessorScheduler.silent = True
 
 
 def CheckSection(CFG, sec):
@@ -414,8 +432,10 @@ def checkbox_to_value(option, value_on=1, value_off=0):
 
     if isinstance(option, list):
         option = option[-1]
+    if isinstance(option, (str, unicode)):
+        option = str(option).strip().lower()
 
-    if option in ('on', 'true', value_on):
+    if option in (True, 'on', 'true', '1', value_on):
         return value_on
 
     return value_off
@@ -594,7 +614,7 @@ def check_setting_str(config, cfg_name, item_name, def_val, silent=True, censor_
     if not silent:
         logger.log(item_name + " -> " + my_val, logger.DEBUG)
 
-    return my_val
+    return str(my_val)
 
 
 class ConfigMigrator(object):
@@ -913,3 +933,6 @@ class ConfigMigrator(object):
         sickbeard.PLEX_SERVER_USERNAME = check_setting_str(self.config_obj, 'Plex', 'plex_username', '', censor_log=True)
         sickbeard.PLEX_SERVER_PASSWORD = check_setting_str(self.config_obj, 'Plex', 'plex_password', '', censor_log=True)
         sickbeard.USE_PLEX_SERVER = bool(check_setting_int(self.config_obj, 'Plex', 'use_plex', 0))
+
+    def _migrate_v9(self):
+        sickbeard.AUTOPOSTPROCESSOR_FREQUENCY = check_setting_str(self.config_obj, 'General', 'autopostprocesser_frequency', '')

@@ -120,10 +120,10 @@
                     </div>
                     <div class="info-container">
                         <div class="row">
-                            <div class="pull-right col-lg-3 col-md-3 hidden-sm hidden-xs">
+                            <div class="pull-right col-lg-4 col-md-4 hidden-sm hidden-xs">
                                 <img src="${srRoot}/showPoster/?show=${show.indexerid}&amp;which=banner" style="max-height:50px;border:1px solid black;" class="pull-right">
                             </div>
-                            <div class="pull-left col-lg-9 col-md-9 col-sm-12 col-xs-12">
+                            <div class="pull-left col-lg-8 col-md-8 col-sm-12 col-xs-12">
                                 % if 'rating' in show.imdb_info:
                                 <% rating_tip = str(show.imdb_info['rating']) + " / 10" + _('Stars') + "<br>" + str(show.imdb_info['votes']) +  _('Votes') %>
                                     <span class="imdbstars" qtip-content="${rating_tip}">${show.imdb_info['rating']}</span>
@@ -152,15 +152,15 @@
                                 % endif
                                 <a href="${anon_url('https://fanart.tv/series/', _show.indexerid)}" rel="noreferrer" onclick="window.open(this.href, '_blank'); return false;" title="https://fanart.tv/series/${show.name}"><span class="displayshow-icon-fanart" /></a>
                             </div>
-                            <div class="pull-left col-lg-9 col-md-9 col-sm-12 col-xs-12">
+                            <div class="pull-left col-lg-8 col-md-8 col-sm-12 col-xs-12">
                                 <ul class="tags">
                                     % if show.genre and not show.imdb_info.get('genres'):
                                         % for genre in show.genre[1:-1].split('|'):
-                                            <a href="${anon_url('http://trakt.tv/shows/popular/?genres=', genre.lower())}" target="_blank" title="${_('View other popular {genre} shows on trakt.tv.').format(genre=genre)}"><li>${_('genre')}</li></a>
+                                            <a href="${anon_url('http://trakt.tv/shows/popular/?genres=', genre.lower())}" target="_blank" title="${_('View other popular {genre} shows on trakt.tv.').format(genre=_(genre))}"><li>${_(genre)}</li></a>
                                         % endfor
                                     % elif show.imdb_info.get('genres'):
                                         % for imdbgenre in show.imdb_info['genres'].replace('Sci-Fi','Science-Fiction').split('|'):
-                                            <a href="${anon_url('http://www.imdb.com/search/title?count=100&title_type=tv_series&genres=', imdbgenre.lower())}" target="_blank" title="${_('View other popular {imdbgenre} shows on IMDB.').format(imdbgenre=imdbgenre)}"><li>${imdbgenre}</li></a>
+                                            <a href="${anon_url('http://www.imdb.com/search/title?count=100&title_type=tv_series&genres=', imdbgenre.lower())}" target="_blank" title="${_('View other popular {imdbgenre} shows on IMDB.').format(imdbgenre=_(imdbgenre))}"><li>${_(imdbgenre)}</li></a>
                                         % endfor
                                     % endif
                                 </ul>
@@ -410,8 +410,12 @@
                         <div class="col-md-12">
                             <br/>
                             <h3 style="display: inline;"><a name="season-${epResult["season"]}"></a>${(_("Specials"), _("Season") + ' ' + str(epResult["season"]))[int(epResult["season"]) > 0]}</h3>
-                            % if sickbeard.DISPLAY_ALL_SEASONS is False:
-                                <button id="showseason-${epResult['season']}" type="button" class="btn btn-xs pull-right" data-toggle="collapse" data-target="#collapseSeason-${epResult['season']}">${_('Show Episodes')}</button>
+                            % if not sickbeard.DISPLAY_ALL_SEASONS:
+                                % if curSeason == -1:
+                                    <button id="showseason-${epResult['season']}" type="button" class="btn btn-xs pull-right" data-toggle="collapse" data-target="#collapseSeason-${epResult['season']}" aria-expanded="true">${_('Hide Episodes')}</button>
+                                %else:
+                                    <button id="showseason-${epResult['season']}" type="button" class="btn btn-xs pull-right" data-toggle="collapse" data-target="#collapseSeason-${epResult['season']}">${_('Show Episodes')}</button>
+                                %endif
                             % endif
                         </div>
                     </div>
@@ -420,8 +424,10 @@
                             <div class="horizontal-scroll">
                                 <table id="${("showTable", "animeTable")[bool(show.is_anime)]}" class="displayShowTable display_show" cellspacing="0" border="0" cellpadding="0">
                                     <thead>
-                                        <tr class="seasoncols" style="display:none;">
-                                            <th data-sorter="false" data-priority="critical" class="col-checkbox"><input type="checkbox" class="seasonCheck"/></th>
+                                        <tr class="seasoncols">
+                                            <th data-sorter="false" data-priority="critical" class="col-checkbox">
+                                                <input type="checkbox" class="seasonCheck" id="${epResult["season"]}" />
+                                            </th>
                                             <th data-sorter="false" class="col-metadata">${_('NFO')}</th>
                                             <th data-sorter="false" class="col-metadata">${_('TBN')}</th>
                                             <th data-sorter="false" class="col-ep">${_('Episode')}</th>
@@ -439,49 +445,7 @@
                                         </tr>
                                     </thead>
 
-                                % if curSeason == -1:
-                                    <tbody class="tablesorter-no-sort">
-                                        <tr id="season-${epResult["season"]}-cols" class="seasoncols">
-                                            <th class="col-checkbox"><input type="checkbox" class="seasonCheck" id="${epResult["season"]}" /></th>
-                                            <th class="col-metadata">${_('NFO')}</th>
-                                            <th class="col-metadata">${_('TBN')}</th>
-                                            <th class="col-ep">${_('Episode')}</th>
-                                            <th class="col-ep">${_('Absolute')}</th>
-                                            <th class="col-ep">${_('Scene')}</th>
-                                            <th class="col-ep">${_('Scene Absolute')}</th>
-                                            <th class="col-name">${_('Name')}</th>
-                                            <th class="col-name">${_('File Name')}</th>
-                                            <th class="col-ep">${_('Size')}</th>
-                                            <th class="col-airdate">${_('Airdate')}</th>
-                                            <th class="col-ep">${_('Download')}</th>
-                                            <th class="col-ep">${_('Subtitles')}</th>
-                                            <th class="col-status">${_('Status')}</th>
-                                            <th class="col-search">${_('Search')}</th>
-                                        </tr>
-                                    </tbody>
-                                % else:
-                                    <tbody class="tablesorter-no-sort">
-                                        <tr id="season-${epResult["season"]}-cols" class="seasoncols">
-                                            <th class="col-checkbox"><input type="checkbox" class="seasonCheck" id="${epResult["season"]}" /></th>
-                                            <th class="col-metadata">${_('NFO')}</th>
-                                            <th class="col-metadata">${_('TBN')}</th>
-                                            <th class="col-ep">${_('Episode')}</th>
-                                            <th class="col-ep">${_('Absolute')}</th>
-                                            <th class="col-ep">${_('Scene')}</th>
-                                            <th class="col-ep">${_('Scene Absolute')}</th>
-                                            <th class="col-name">${_('Name')}</th>
-                                            <th class="col-name">${_('File Name')}</th>
-                                            <th class="col-ep">${_('Size')}</th>
-                                            <th class="col-airdate">${_('Airdate')}</th>
-                                            <th class="col-ep">${_('Download')}</th>
-                                            <th class="col-ep">${_('Subtitles')}</th>
-                                            <th class="col-status">${_('Status')}</th>
-                                            <th class="col-search">${_('Search')}</th>
-                                        </tr>
-                                    </tbody>
-                                % endif
-
-                                % if sickbeard.DISPLAY_ALL_SEASONS is False:
+                                % if not sickbeard.DISPLAY_ALL_SEASONS:
                                     <tbody class="toggle collapse${("", " in")[curSeason == -1]}" id="collapseSeason-${epResult['season']}">
                                 % else:
                                     <tbody>

@@ -7,13 +7,14 @@
             url:               srRoot + '/browser/',
             autocompleteURL:   srRoot + '/browser/complete',
             includeFiles:      0,
+            imagesOnly:        0,
             showBrowseButton:  true
         }
     };
 
     var fileBrowserDialog, currentBrowserPath, currentRequest = null;
 
-    function browse(path, endpoint, includeFiles) {
+    function browse(path, endpoint, includeFiles, imagesOnly) {
         if (currentBrowserPath === path) {
             return;
         }
@@ -26,7 +27,7 @@
 
         fileBrowserDialog.dialog('option', 'dialogClass', 'browserDialog busy');
 
-        currentRequest = $.getJSON(endpoint, { path: path, includeFiles: includeFiles }, function (data) {
+        currentRequest = $.getJSON(endpoint, {path: path, includeFiles: includeFiles, imagesOnly: imagesOnly}, function (data) {
             fileBrowserDialog.empty();
             var firstVal = data[0];
             var i = 0;
@@ -39,27 +40,32 @@
                 .val(firstVal.currentPath)
                 .on('keypress', function (e) {
                     if (e.which === 13) {
-                        browse(e.target.value, endpoint, includeFiles);
+                        browse(e.target.value, endpoint, includeFiles, imagesOnly);
                     }
                 })
                 .appendTo(fileBrowserDialog)
                 .fileBrowser({showBrowseButton: false})
                 .on('autocompleteselect', function (e, ui) {
-                    browse(ui.item.value, endpoint, includeFiles);
+                    browse(ui.item.value, endpoint, includeFiles, imagesOnly);
                 });
 
             list = $('<ul>').appendTo(fileBrowserDialog);
             $.each(data, function (i, entry) {
+                if (imagesOnly && entry.isFile && !entry.isImage) {
+                    return true;
+                }
                 link = $('<a href="javascript:void(0)">').on('click', function () {
                     if (entry.isFile) {
                         currentBrowserPath = entry.path;
                         $('.browserDialog .ui-button:contains("Ok")').click();
                     } else {
-                        browse(entry.path, endpoint, includeFiles);
+                        browse(entry.path, endpoint, includeFiles, imagesOnly);
                     }
                 }).text(entry.name);
-                if (entry.isFile) {
-                    link.prepend('<span class="ui-icon ui-icon-blank"></span>');
+                if (entry.isImage) {
+                    link.prepend('<span class="ui-icon ui-icon-image"></span>');
+                } else if (entry.isFile) {
+                    link.prepend('<span class="ui-icon ui-icon-document"></span>');
                 } else {
                     link.prepend('<span class="ui-icon ui-icon-folder-collapsed"></span>')
                         .on('mouseenter', function () { $('span', this).addClass('ui-icon-folder-open'); })
@@ -78,7 +84,7 @@
         // make a fileBrowserDialog object if one doesn't exist already
         if (!fileBrowserDialog) {
             // set up the jquery dialog
-            fileBrowserDialog = $('<div class="fileBrowserDialog" style="display:hidden"></div>').appendTo('body').dialog({
+            fileBrowserDialog = $('<div class="fileBrowserDialog" style="display:none"></div>').appendTo('body').dialog({
                 dialogClass: 'browserDialog',
                 title:       options.title,
                 position:    { my: 'center top', at: 'center top+60', of: window },
@@ -99,7 +105,7 @@
             'class': 'btn',
             click: function () {
                 // store the browsed path to the associated text field
-                callback(currentBrowserPath, options);
+                callback(options.includeFiles ? currentBrowserPath : $(this).find('.fileBrowserField').val(), options);
                 $(this).dialog('close');
             }
         }, {
@@ -116,7 +122,7 @@
             initialDir = options.initialDir;
         }
 
-        browse(initialDir, options.url, options.includeFiles);
+        browse(initialDir, options.url, options.includeFiles, options.imagesOnly);
         fileBrowserDialog.dialog('open');
 
         return false;
@@ -171,12 +177,12 @@
         if (ls && options.key) {
             path = localStorage['fileBrowser-' + options.key];
         }
-        if (options.key && options.field.val().length === 0 && (path)) {
+        if (options.key && options.field.val().length === 0 && path) {
             options.field.val(path);
         }
 
         callback = function (path, options) {
-            // store the browsed path to the associated text field
+
             options.field.val(path);
 
             // use a localStorage to remember for next time -- no ie6/7

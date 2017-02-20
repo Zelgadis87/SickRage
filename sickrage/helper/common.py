@@ -28,7 +28,7 @@ import re
 import glob
 from fnmatch import fnmatch
 
-from github import Github
+from github import Github, BadCredentialsException
 
 import sickbeard
 
@@ -113,7 +113,7 @@ HTTP_STATUS_CODES = {
     599: 'Network connect timeout error',
 }
 MEDIA_EXTENSIONS = [
-    '3gp', 'avi', 'divx', 'dvr-ms', 'f4v', 'flv', 'img', 'iso', 'm2ts', 'm4v',
+    '3gp', 'avi', 'divx', 'dvr-ms', 'f4v', 'flv', 'm2ts', 'm4v',
     'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ogm', 'ogv', 'rmvb', 'tp', 'ts', 'vob',
     'webm', 'wmv', 'wtv',
 ]
@@ -369,8 +369,10 @@ def setup_github():
             sickbeard.gh = Github(
                 login_or_token=sickbeard.GIT_USERNAME,
                 password=sickbeard.GIT_PASSWORD, user_agent="SickRage")
+            # This will trigger BadCredentialsException if user/pass are wrong
+            sickbeard.gh.get_organization(sickbeard.GIT_ORG)
 
-    except Exception as error:
+    except (Exception, BadCredentialsException) as error:
         sickbeard.gh = None
         sickbeard.logger.log(u'Unable to setup GitHub properly with your github login. Please'
                              ' check your credentials. Error: {0}'.format(error), sickbeard.logger.WARNING)
