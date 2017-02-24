@@ -119,8 +119,8 @@ class ShowQueue(generic_queue.GenericQueue):
                 logger.DEBUG)
             return
 
-        if force == False and show.paused:
-            logger.log('Skipping show [{0}] because is paused.'.format(show.name), logger.DEBUG)
+        if show.paused and not force:
+            logger.log('Skipping show [{0}] because it is paused.'.format(show.name), logger.DEBUG)
             return
 
         logger.log('Queueing show refresh for {0}'.format(show.name), logger.DEBUG)
@@ -142,7 +142,7 @@ class ShowQueue(generic_queue.GenericQueue):
         return queueItemObj
 
     def addShow(self,  # pylint: disable=too-many-arguments, too-many-locals
-                indexer, indexer_id, showDir, default_status=None, quality=None, flatten_folders=None, stay_ahead=0,
+                indexer, indexer_id, showDir, default_status=None, quality=None, season_folders=None, stay_ahead=0,
                 lang=None, subtitles=None, subtitles_sr_metadata=None, anime=None, scene=None, paused=None,
                 blacklist=None, whitelist=None, default_status_after=None, root_dir=None):
 
@@ -152,7 +152,7 @@ class ShowQueue(generic_queue.GenericQueue):
         if default_status_after is None:
             default_status_after = sickbeard.STATUS_DEFAULT_AFTER
 
-        queueItemObj = QueueItemAdd(indexer, indexer_id, showDir, default_status, quality, flatten_folders, lang,
+        queueItemObj = QueueItemAdd(indexer, indexer_id, showDir, default_status, quality, season_folders, lang,
                                     subtitles, subtitles_sr_metadata, anime, scene, paused, blacklist, whitelist,
                                     default_status_after, stay_ahead, root_dir)
 
@@ -236,7 +236,7 @@ class ShowQueueItem(generic_queue.QueueItem):
 
 class QueueItemAdd(ShowQueueItem):  # pylint: disable=too-many-instance-attributes
     def __init__(self,  # pylint: disable=too-many-arguments, too-many-locals
-                 indexer, indexer_id, showDir, default_status, quality, flatten_folders,
+                 indexer, indexer_id, showDir, default_status, quality, season_folders,
                  lang, subtitles, subtitles_sr_metadata, anime, scene, paused, blacklist, whitelist,
                  default_status_after, stay_ahead, root_dir):
 
@@ -249,7 +249,7 @@ class QueueItemAdd(ShowQueueItem):  # pylint: disable=too-many-instance-attribut
         self.indexer_id = indexer_id
         self.default_status = default_status
         self.quality = quality
-        self.flatten_folders = flatten_folders
+        self.season_folders = season_folders
         self.lang = lang
         self.subtitles = subtitles
         self.subtitles_sr_metadata = subtitles_sr_metadata
@@ -403,7 +403,7 @@ class QueueItemAdd(ShowQueueItem):  # pylint: disable=too-many-instance-attribut
             self.show.subtitles = self.subtitles if self.subtitles is not None else sickbeard.SUBTITLES_DEFAULT
             self.show.subtitles_sr_metadata = self.subtitles_sr_metadata
             self.show.quality = self.quality if self.quality else sickbeard.QUALITY_DEFAULT
-            self.show.flatten_folders = self.flatten_folders if self.flatten_folders is not None else sickbeard.FLATTEN_FOLDERS_DEFAULT
+            self.show.season_folders = self.season_folders if self.season_folders is not None else sickbeard.SEASON_FOLDERS_DEFAULT
             self.show.stay_ahead = self.stay_ahead if self.stay_ahead is not None else sickbeard.STAY_AHEAD_DEFAULT
             self.show.anime = self.anime if self.anime is not None else sickbeard.ANIME_DEFAULT
             self.show.scene = self.scene if self.scene is not None else sickbeard.SCENE_DEFAULT
