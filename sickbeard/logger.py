@@ -141,6 +141,10 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
         :param database_logging: True if logging database access
         """
         self.log_file = self.log_file or ek(os.path.join, sickbeard.LOG_DIR, 'sickrage.log')
+
+        global log_file
+        log_file = self.log_file
+
         self.debug_logging = debug_logging
         self.console_logging = console_logging
         self.file_logging = file_logging
@@ -242,7 +246,8 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
             try:
                 self.logger.log(level, message, *args, **kwargs)
             except:
-                print msg
+                if msg: # Otherwise creates empty messages in log...
+                    print msg
 
     def log_error_and_exit(self, error_msg, *args, **kwargs):
         self.log(error_msg, ERROR, *args, **kwargs)
@@ -257,8 +262,11 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
         submitter_result = ''
         issue_id = None
 
-        if not all((sickbeard.GIT_USERNAME, sickbeard.GIT_PASSWORD, sickbeard.DEBUG, sickbeard.gh, classes.ErrorViewer.errors)):
-            submitter_result = 'Please set your GitHub username and password in the config and enable debug. Unable to submit issue ticket to GitHub!'
+        gh_credentials = (sickbeard.GIT_AUTH_TYPE == 0 and sickbeard.GIT_USERNAME and sickbeard.GIT_PASSWORD) \
+            or (sickbeard.GIT_AUTH_TYPE == 1 and sickbeard.GIT_TOKEN)
+
+        if not all((gh_credentials, sickbeard.DEBUG, sickbeard.gh, classes.ErrorViewer.errors)):
+            submitter_result = 'Please set your GitHub token or username and password in the config and enable debug. Unable to submit issue ticket to GitHub!'
             return submitter_result, issue_id
 
         try:
@@ -447,7 +455,7 @@ def shutdown():
 def submit_errors(*args, **kwargs):
     return Wrapper.instance.submit_errors(*args, **kwargs)
 
-log_file = Wrapper.instance.log_file
+log_file = None
 
 LOG_FILTERS = {
     '<NONE>': _(u'&lt;No Filter&gt;'),
@@ -497,7 +505,7 @@ def log_data(min_level, log_filter, log_search, max_lines):
     for _log_file in log_files:
         if len(data) < max_lines:
             with io.open(_log_file, 'r', encoding='utf-8') as f:
-                data += [line for line in reversed(f.readlines())]
+                data += [line for line in reversed(f.readlines()) if line]
         else:
             break
 

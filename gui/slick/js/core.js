@@ -57,11 +57,13 @@ function addSiteMessage(level, message){
         var messagesDiv = $('#site-messages');
         if (messagesDiv !== undefined) {
             messagesDiv.empty();
-            siteMessages.messages.forEach(function (message, i) {
-                messagesDiv.append('<div class="alert alert-' + message.level + ' upgrade-notification hidden-print" id="site-message-' + i +'" role="alert">' +
-                    '<span>' + message.message + '</span><span class="glyphicon glyphicon-check site-message-dismiss pull-right" data-id="' + i + '"/>' +
-                '</div>');
-            });
+            for (var key in siteMessages) {
+                if (siteMessages.hasOwnProperty(key)) {
+                    messagesDiv.append('<div class="alert alert-' + siteMessages[key].level + ' upgrade-notification hidden-print" id="site-message-' + key +'" role="alert">' +
+                        '<span>' + siteMessages[key].message + '</span><span class="glyphicon glyphicon-check site-message-dismiss pull-right" data-id="' + key + '"/>' +
+                        '</div>');
+                }
+            }
         }
     });
 
@@ -320,6 +322,41 @@ var SICKRAGE = {
                         }
                     }
                 });
+            });
+
+            // GitHub Auth Types
+            function setupGithubAuthTypes() {
+                var selected = parseInt( $('input[name="git_auth_type"]').filter(':checked').val() );
+
+                $('div[name="content_github_auth_type"]').each(function(index) {
+                    if (index === selected) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            }
+
+            setupGithubAuthTypes();
+
+            $('input[name="git_auth_type"]').on('click', function(){
+                setupGithubAuthTypes();
+            });
+
+            $('#git_token').on('click', function() {
+                $('#git_token').select();
+            });
+
+            $("#create_access_token").on('click', function() {
+                notifyModal(
+                    '<p>Copy the generated token and paste it in the token input box.</p>' +
+                    '<p><a href="' + anonURL + 'https://github.com/settings/tokens/new?description=SickRage&scopes=user,gist,public_repo" target="_blank">' +
+                    '<input class="btn" type="button" value="Continue to Github..."></a></p>');
+                $('#git_token').select();
+            });
+
+            $("#manage_tokens").on('click', function() {
+                window.open(anonURL + 'https://github.com/settings/tokens', '_blank');
             });
         },
         index: function() {
@@ -1135,6 +1172,7 @@ var SICKRAGE = {
         postProcessing: function() {
             $('#config-components').tabs();
             $('#tv_download_dir').fileBrowser({ title: 'Select TV Download Directory' });
+            $('#unpack_dir').fileBrowser({ title: 'Select Unpack Directory' });
 
             // http://stackoverflow.com/questions/2219924/idiomatic-jquery-delayed-event-only-after-a-short-pause-in-typing-e-g-timew
             var typewatch = (function () {
@@ -1167,7 +1205,7 @@ var SICKRAGE = {
 
                 $.post(srRoot + '/config/postProcessing/testNaming', {
                     'pattern': example.pattern,
-                    'anime_type': 3 // jshint ignore:line
+                    'anime_type': 3
                 }, function (data) {
                     if (data) {
                         $('#naming_example').text(data + '.ext');
@@ -1204,7 +1242,7 @@ var SICKRAGE = {
                         $('#naming_pattern').css('background-color', '#FFDDDD');
                     } else if (data === "seasonfolders") {
                         $('#naming_pattern').qtip('option', {
-                            'content.text': 'This pattern would be invalid without the folders, using it will force "Flatten" off for all shows.',
+                            'content.text': 'This pattern would be invalid without the folders, using it will force "Season Folders" on for all shows.',
                             'style.classes': 'qtip-rounded qtip-shadow qtip-red'
                         });
                         $('#naming_pattern').qtip('toggle', true);
@@ -1248,7 +1286,7 @@ var SICKRAGE = {
                         $('#naming_abd_pattern').css('background-color', '#FFDDDD');
                     } else if (data === "seasonfolders") {
                         $('#naming_abd_pattern').qtip('option', {
-                            'content.text': 'This pattern would be invalid without the folders, using it will force "Flatten" off for all shows.',
+                            'content.text': 'This pattern would be invalid without the folders, using it will force "Season Folders" on for all shows.',
                             'style.classes': 'qtip-rounded qtip-shadow qtip-red'
                         });
                         $('#naming_abd_pattern').qtip('toggle', true);
@@ -1292,7 +1330,7 @@ var SICKRAGE = {
                         $('#naming_sports_pattern').css('background-color', '#FFDDDD');
                     } else if (data === "seasonfolders") {
                         $('#naming_sports_pattern').qtip('option', {
-                            'content.text': 'This pattern would be invalid without the folders, using it will force "Flatten" off for all shows.',
+                            'content.text': 'This pattern would be invalid without the folders, using it will force "Season Folders" on for all shows.',
                             'style.classes': 'qtip-rounded qtip-shadow qtip-red'
                         });
                         $('#naming_sports_pattern').qtip('toggle', true);
@@ -1353,7 +1391,7 @@ var SICKRAGE = {
                         $('#naming_pattern').css('background-color', '#FFDDDD');
                     } else if (data === "seasonfolders") {
                         $('#naming_pattern').qtip('option', {
-                            'content.text': 'This pattern would be invalid without the folders, using it will force "Flatten" off for all shows.',
+                            'content.text': 'This pattern would be invalid without the folders, using it will force "Season Folders" on for all shows.',
                             'style.classes': 'qtip-rounded qtip-shadow qtip-red'
                         });
                         $('#naming_pattern').qtip('toggle', true);
@@ -2099,11 +2137,11 @@ var SICKRAGE = {
                     7: { filter: 'parsed' }
                 },
                 widgetOptions: {
-                    filter_columnFilters: true, // jshint ignore:line
-                    filter_hideFilters: true, // jshint ignore:line
-                    stickyHeaders_offset: 50, // jshint ignore:line
-                    filter_saveFilters: true, // jshint ignore:line
-                    filter_functions: { // jshint ignore:line
+                    'filter_columnFilters': true,
+                    'filter_hideFilters': true,
+                    'stickyHeaders_offset': 50,
+                    'filter_saveFilters': true,
+                    'filter_functions': {
                         5: function(e, n, f) {
                             var test = false;
                             var pct = Math.floor((n % 1) * 1000);
@@ -2293,11 +2331,11 @@ var SICKRAGE = {
             $(".displayShowTable").tablesorter({
                 widgets: ['saveSort', 'stickyHeaders', 'columnSelector'],
                 widgetOptions : {
-                    columnSelector_saveColumns: true, // jshint ignore:line
-                    columnSelector_layout : '<label><input type="checkbox"/>{name}</label>', // jshint ignore:line
-                    columnSelector_mediaquery: false, // jshint ignore:line
-                    columnSelector_cssChecked : 'checked', // jshint ignore:line
-                    stickyHeaders_offset: 50 // jshint ignore:line
+                    'columnSelector_saveColumns': true,
+                    'columnSelector_layout' : '<label><input type="checkbox"/>{name}</label>',
+                    'columnSelector_mediaquery': false,
+                    'columnSelector_cssChecked' : 'checked',
+                    'stickyHeaders_offset': 50
                 }
             });
 
@@ -2705,7 +2743,7 @@ var SICKRAGE = {
                     4: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Sports
                     5: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Scene
                     6: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Anime
-                    7: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Flatten
+                    7: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Season Folders
                     8: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Paused
                     9: function(node) { return $(node).find("img").attr("alt").toLowerCase(); },  // Subtitle
                     10: function(node) { return $(node).text().toLowerCase(); },  // Default Episode Status
@@ -2930,18 +2968,25 @@ var SICKRAGE = {
                 widgets: ['zebra', 'filter'],
                 sortList: [[0,1]],
                 textExtraction: (function(){
-                    if(isMeta('sickbeard.HISTORY_LAYOUT', ['detailed'])){
+                    if(isMeta('sickbeard.HISTORY_LAYOUT', ['detailed'])) {
                         return {
-                            0: function(node) { return $(node).find('time').attr('datetime'); },
-                            4: function(node) { return $(node).find("span").text().toLowerCase(); }
+                            0: function(node) { return $(node).find('time').attr('datetime'); }, // Time
+                            4: function(node) { return $(node).find("span").text().toLowerCase(); } // Quality
                         };
                     } else {
-                        return {
-                            0: function(node) { return $(node).find('time').attr('datetime'); },
-                            1: function(node) { return $(node).find("span").text().toLowerCase(); },
-                            2: function(node) { return $(node).attr("provider").toLowerCase(); },
-                            5: function(node) { return $(node).attr("quality").toLowerCase(); }
+                        var compactExtract = {
+                            0: function(node) { return $(node).find('time').attr('datetime'); }, // Time
+                            2: function(node) { return $(node).attr("provider").toLowerCase(); }
                         };
+
+                        if(isMeta('sickbeard.USE_SUBTITLES', ['True'])) {
+                            compactExtract[4] = function (node) { return $(node).find("img").attr('title'); };  // Subtitles
+                            compactExtract[5] = function (node) { return $(node).find("span").text().toLowerCase(); }; // Quality
+                        } else {
+                            compactExtract[4] = function (node) { return $(node).find("span").text().toLowerCase(); }; // Quality
+                        }
+
+                        return compactExtract;
                     }
                 }()),
                 headers: (function(){
@@ -2952,12 +2997,20 @@ var SICKRAGE = {
                             5: { sorter: false, filter: false}
                         };
                     } else {
-                        return {
-                            0: { sorter: 'realISODate' },
-                            4: { sorter: false },
-                            5: { sorter: 'quality' },
-                            6: { sorter: false, filter: false}
-                        };
+                        if(isMeta('sickbeard.USE_SUBTITLES', ['True'])) {
+                            return {
+                                0: { sorter: 'realISODate' },
+                                4: { sorter: false },
+                                5: { sorter: 'quality' },
+                                6: { sorter: false, filter: false }
+                            };
+                        } else {
+                            return {
+                                0: { sorter: 'realISODate' },
+                                4: { sorter: 'quality' },
+                                5: { sorter: false, filter: false }
+                            };
+                        }
                     }
                 }())
             });
@@ -3095,11 +3148,11 @@ var SICKRAGE = {
                         9: { sorter: false }
                     },
                     widgetOptions: {
-                        filter_columnFilters: true, // jshint ignore:line
-                        filter_hideFilters: true, // jshint ignore:line
-                        filter_saveFilters: true, // jshint ignore:line
-                        columnSelector_mediaquery: false, // jshint ignore:line
-                        stickyHeaders_offset: 50 // jshint ignore:line
+                        'filter_columnFilters': true,
+                        'filter_hideFilters': true,
+                        'filter_saveFilters': true,
+                        'columnSelector_mediaquery': false,
+                        'stickyHeaders_offset': 50
                     }
                 });
 
@@ -3213,7 +3266,7 @@ var SICKRAGE = {
                     defaultStatus: $('#statusSelect').val(),
                     anyQualities: anyQualArray.join(','),
                     bestQualities: bestQualArray.join(','),
-                    defaultFlattenFolders: $('#flatten_folders').prop('checked'),
+                    defaultSeasonFolders: $('#season_folders').prop('checked'),
                     subtitles: $('#subtitles').prop('checked'),
                     anime: $('#anime').prop('checked'),
                     scene: $('#scene').prop('checked'),
@@ -3223,7 +3276,7 @@ var SICKRAGE = {
                 $(this).attr('disabled', true);
             });
 
-            $('#statusSelect, #qualityPreset, #flatten_folders, #anyQualities, #bestQualities, #subtitles, #scene, #anime, #statusSelectAfter').change(function () {
+            $('#statusSelect, #qualityPreset, #season_folders, #anyQualities, #bestQualities, #subtitles, #scene, #anime, #statusSelectAfter').change(function () {
                 $('#saveDefaultsButton').attr('disabled', false);
             });
 

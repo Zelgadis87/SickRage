@@ -201,10 +201,13 @@ def process_dir(process_path, release_name=None, process_method=None, force=Fals
                 result.output += log_helper(u"Deleted folder: {0}".format(current_directory), logger.DEBUG)
 
     for directory_from_rar in directories_from_rars:
+        # Only allow methods 'move' and 'copy'. On different method fall back to 'move'.
+        method_fallback = ('move', process_method)[process_method in ('move', 'copy')]
+
         process_dir(
             process_path=directory_from_rar,
             release_name=ek(os.path.basename, directory_from_rar),
-            process_method=('move', process_method)[process_method in ('move', 'copy')],
+            process_method=method_fallback,
             force=force,
             is_priority=is_priority,
             delete_on=sickbeard.DELRARCONTENTS,
@@ -212,7 +215,12 @@ def process_dir(process_path, release_name=None, process_method=None, force=Fals
             mode=mode
         )
 
-        if sickbeard.DELRARCONTENTS:
+        # auto post-processing deletes rar content by default if method is 'move',
+        # sickbeard.DELRARCONTENTS allows to override even if method is NOT 'move'
+        # manual post-processing will only delete when prompted by delete_on
+        if sickbeard.DELRARCONTENTS \
+            or not sickbeard.DELRARCONTENTS and mode == 'auto' and method_fallback == 'move' \
+            or mode == 'manual' and delete_on:
             delete_folder(directory_from_rar, False)
 
     result.output += log_helper((u"Processing Failed", u"Successfully processed")[result.aggresult], (logger.WARNING, logger.INFO)[result.aggresult])
@@ -349,8 +357,16 @@ def unrar(path, rar_files, force, result):  # pylint: disable=too-many-branches,
 
                 rar_release_name = archive.rpartition('.')[0]
 
+                # Choose the directory we'll unpack to:
+                if sickbeard.UNPACK_DIR and os.path.isdir(sickbeard.UNPACK_DIR): # verify the unpack dir exists
+                    unpack_base_dir = sickbeard.UNPACK_DIR
+                else:
+                    unpack_base_dir = path
+                    if sickbeard.UNPACK_DIR: # Let user know if
+                        result.output += log_helper('Unpack directory cannot be verified. Using {0}'.format(path), logger.DEBUG)
+
                 # Fix up the list for checking if already processed
-                rar_media_files = [os.path.join(path, rar_release_name, rar_media_file) for rar_media_file in rar_media_files]
+                rar_media_files = [os.path.join(unpack_base_dir, rar_release_name, rar_media_file) for rar_media_file in rar_media_files]
 
                 skip_rar = False
                 for rar_media_file in rar_media_files:
@@ -365,7 +381,7 @@ def unrar(path, rar_files, force, result):  # pylint: disable=too-many-branches,
                 if skip_rar:
                     continue
 
-                rar_extract_path = ek(os.path.join, path, rar_release_name)
+                rar_extract_path = ek(os.path.join, unpack_base_dir, rar_release_name)
                 result.output += log_helper(u"Unpacking archive: {0}".format(archive), logger.DEBUG)
                 rar_handle.extractall(path=rar_extract_path)
                 unpacked_dirs.append(rar_extract_path)
@@ -435,7 +451,7 @@ def already_processed(process_path, video_file, force, result):  # pylint: disab
         search_sql += " AND tv_episodes.showid={0} AND tv_episodes.season={1} AND tv_episodes.episode={2}".format(
             parse_result.show.indexerid, parse_result.season_number, parse_result.episode_numbers[0])
 
-    search_sql += " AND tv_episodes.status IN (" + ",".join([str(x) for x in common.Quality.DOWNLOADED]) + ")"
+    search_sql += " AND tv_episodes.status IN (" + ",".join([str(x) for x in common.Quality.DOWNLOADED + common.Quality.ARCHIVED]) + ")"
     search_sql += " AND history.resource LIKE ? LIMIT 1"
     sql_result = main_db_con.select(search_sql, ['%' + video_file])
     if sql_result:
