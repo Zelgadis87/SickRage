@@ -540,6 +540,15 @@ span.show-option {
     display: inline-block;
 }
 
+.loading-spinner16 {
+    background-image: url("../images/loading16.gif");
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    position: relative;
+    top: 3px;
+}
+
 .show-container {
     margin: 4px;
     background-color: #F3F3F3;
@@ -1377,7 +1386,7 @@ schedule.mako
 ========================================================================== */
 
 .key {
-    margin-bottom: 20px;
+    line-height: 30px;
 }
 
 .listing-key {
@@ -1399,6 +1408,10 @@ schedule.mako
     background-color: #FFDDDD;
 }
 
+.listing-snatched {
+    background-color: #EBC1EA;
+}
+
 .listing-toofar {
     background-color: #BEDEED;
 }
@@ -1416,6 +1429,11 @@ span.listing-current {
 span.listing-overdue {
     color: #890000;
     border: 1px solid #890000;
+}
+
+span.listing-snatched {
+    color: #652164;
+    border: 1px solid #652164;
 }
 
 span.listing-toofar {
@@ -3092,10 +3110,10 @@ tablesorter.css
     vertical-align: middle;
 }
 
-/* remove extra border from left edge */
-.tablesorter th:first-child,
-.tablesorter td:first-child {
-    border-left: none;
+/* add extra border at right edge */
+.tablesorter th:last-child,
+.tablesorter td:last-child {
+    border-right: #FFFFFF 1px solid;
 }
 
 .tablesorter th {
@@ -3159,6 +3177,16 @@ thead.tablesorter-stickyHeader {
     text-align: center;
     background: #EEEEEE;
     border-bottom: 1px solid #DDDDDD;
+}
+
+/* add extra border at left edge */
+.tablesorter tr.tablesorter-filter-row td:first-child {
+    border-left: #FFFFFF 1px solid;
+}
+
+/* add extra border at right edge */
+.tablesorter tr.tablesorter-filter-row td:last-child {
+    border-right: #FFFFFF 1px solid;
 }
 
 /* hidden filter row */

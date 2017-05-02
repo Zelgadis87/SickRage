@@ -19,7 +19,7 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 # pylint:disable=too-many-lines
 
-from __future__ import unicode_literals
+from __future__ import print_function, unicode_literals
 
 import ast
 import base64
@@ -39,9 +39,8 @@ import ssl
 import stat
 import time
 import traceback
-import urllib
 import uuid
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ElementTree
 import zipfile
 from contextlib import closing
 from itertools import cycle, izip
@@ -52,21 +51,44 @@ import cfscrape
 import requests
 from cachecontrol import CacheControl
 from requests.utils import urlparse
+from requests.compat import urljoin
+import six
+
+# noinspection PyUnresolvedReferences
+from six.moves import urllib
 
 import sickbeard
 from sickbeard import classes, db, logger
 from sickbeard.common import USER_AGENT
 from sickrage.helper import MEDIA_EXTENSIONS, SUBTITLE_EXTENSIONS, episode_num, pretty_file_size
 from sickrage.helper.encoding import ek
+from sickrage.helper.exceptions import ex
 from sickrage.show.Show import Show
-
-
-
 
 
 # pylint: disable=protected-access
 # Access to a protected member of a client class
 urllib._urlopener = classes.SickBeardURLopener()
+orig_getaddrinfo = socket.getaddrinfo
+
+
+# Patches getaddrinfo so that resolving domains like thetvdb do not return ip6 addresses that no longer work on thetvdb.
+# This will not effect SickRage itself from being accessed through ip6
+def getaddrinfo_wrapper(host, port, family=socket.AF_INET, socktype=0, proto=0, flags=0):
+    return orig_getaddrinfo(host, port, family, socktype, proto, flags)
+
+
+if socket.getaddrinfo.__module__ in ('socket', '_socket'):
+    logger.log("Patching socket to IPv4 only", logger.DEBUG)
+    socket.getaddrinfo = getaddrinfo_wrapper
+
+# Override original shutil function to increase its speed by increasing its buffer to 10MB (optimal)
+copyfileobj_orig = shutil.copyfileobj
+
+def _copyfileobj(fsrc, fdst, length=10485760):
+    """ Run shutil.copyfileobj with a bigger buffer """
+    return copyfileobj_orig(fsrc, fdst, length)
+shutil.copyfileobj = _copyfileobj
 
 
 def indentXML(elem, level=0):
@@ -163,7 +185,7 @@ def remove_non_release_groups(name):
     }
 
     _name = name
-    for remove_string, remove_type in removeWordsList.iteritems():
+    for remove_string, remove_type in six.iteritems(removeWordsList):
         if remove_type == 'search':
             _name = _name.replace(remove_string, '')
         elif remove_type == 'searchre':
@@ -182,7 +204,8 @@ def is_media_file(filename):
 
     # ignore samples
     try:
-        assert isinstance(filename, (str, unicode)), type(filename)
+        assert isinstance(filename, six.string_types), type(filename)
+        is_rar = is_rar_file(filename)
         filename = ek(os.path.basename, filename)
 
         if re.search(r'(^|[\W_])(?<!shomin.)(sample\d*)[\W_]', filename, re.I):
@@ -201,7 +224,7 @@ def is_media_file(filename):
         if re.search('extras?$', filname_parts[0], re.I):
             return False
 
-        return filname_parts[-1].lower() in MEDIA_EXTENSIONS
+        return filname_parts[-1].lower() in MEDIA_EXTENSIONS or (sickbeard.UNPACK == 2 and is_rar)
     except (TypeError, AssertionError) as error:  # Not a string
         logger.log('Invalid filename. Filename must be a string. {0}'.format(error), logger.DEBUG)  # pylint: disable=no-member
         return False
@@ -381,14 +404,14 @@ def moveFile(srcFile, destFile):
 def link(src, dst):
     """
     Create a file link from source to destination.
-    TODO: Make this unicode proof
+    TODO: Make this six.text_type proof
 
     :param src: Source file
     :param dst: Destination file
     """
 
     if platform.system() == 'Windows':
-        if ctypes.windll.kernel32.CreateHardLinkW(ctypes.c_wchar_p(unicode(dst)), ctypes.c_wchar_p(unicode(src)), None) == 0:
+        if ctypes.windll.kernel32.CreateHardLinkW(ctypes.c_wchar_p(six.text_type(dst)), ctypes.c_wchar_p(six.text_type(src)), None) == 0:
             raise ctypes.WinError()
     else:
         ek(os.link, src, dst)
@@ -420,7 +443,7 @@ def symlink(src, dst):
     """
 
     if platform.system() == 'Windows':
-        if ctypes.windll.kernel32.CreateSymbolicLinkW(ctypes.c_wchar_p(unicode(dst)), ctypes.c_wchar_p(unicode(src)), 1 if ek(os.path.isdir, src) else 0) in [0, 1280]:
+        if ctypes.windll.kernel32.CreateSymbolicLinkW(ctypes.c_wchar_p(six.text_type(dst)), ctypes.c_wchar_p(six.text_type(src)), 1 if ek(os.path.isdir, src) else 0) in [0, 1280]:
             raise ctypes.WinError()
     else:
         ek(os.symlink, src, dst)
@@ -659,7 +682,7 @@ def fixSetGroupID(childPath):
         childPath_owner = childStat.st_uid  # pylint: disable=no-member
         user_id = os.geteuid()  # @UndefinedVariable - only available on UNIX
 
-        if user_id != 0 and user_id != childPath_owner:
+        if user_id not in (childPath_owner, 0):
             logger.log("Not running as root or owner of " + childPath + ", not trying to set the set-group-ID",
                        logger.DEBUG)
             return
@@ -1069,29 +1092,42 @@ def is_hidden_folder(folder):
     """
     def is_hidden(filepath):
         name = ek(os.path.basename, ek(os.path.abspath, filepath))
-        return name == u'@eaDir' or name.startswith('.') or has_hidden_attribute(filepath)
+        return name == '@eaDir' or name.startswith('.') or has_hidden_attribute(filepath)
 
     def has_hidden_attribute(filepath):
         try:
-            attrs = ctypes.windll.kernel32.GetFileAttributesW(ctypes.c_wchar_p(unicode(filepath)))
+            attrs = ctypes.windll.kernel32.GetFileAttributesW(ctypes.c_wchar_p(six.text_type(filepath)))
             assert attrs != -1
             result = bool(attrs & 2)
         except (AttributeError, AssertionError, OSError, IOError):
             result = False
         return result
 
-    if ek(os.path.isdir, folder):
-        if is_hidden(folder):
-            return True
+    if ek(os.path.isdir, folder) and is_hidden(folder):
+        return True
 
     return False
-
 
 def real_path(path):
     """
     Returns: the canonicalized absolute pathname. The resulting path will have no symbolic link, '/./' or '/../' components.
     """
     return ek(os.path.normpath, ek(os.path.normcase, ek(os.path.realpath, path)))
+
+def is_subdirectory(subdir_path, topdir_path):
+    """
+    Returns true if a subdir_path is a subdirectory of topdir_path
+    else otherwise.
+
+    :param subdir_path: The full path to the sub-directory
+    :param topdir_path: The full path to the top directory to check subdir_path against
+    """
+    topdir_path = real_path(topdir_path)
+    subdir_path = real_path(subdir_path)
+
+    # checks if the common prefix of both is equal to directory
+    # e.g. /a/b/c/d.rst and directory is /a/b, the common prefix is /a/b
+    return os.path.commonprefix([subdir_path, topdir_path]) == topdir_path
 
 
 def validateShow(show, season=None, episode=None):
@@ -1170,8 +1206,8 @@ def extractZip(archive, targetDir):
     """
     Unzip a file to a directory
 
-    :param fileList: A list of file names - full path each name
-    :param archive: The file name for the archive with a full path
+    :param archive: The file name of the archive to extract with a full path
+    :param targetDir: The full path to the extraction target directory
     """
 
     try:
@@ -1187,7 +1223,7 @@ def extractZip(archive, targetDir):
 
             # copy file (taken from zipfile's extract)
             source = zip_file.open(member)
-            target = file(ek(os.path.join, targetDir, filename), "wb")
+            target = open(ek(os.path.join, targetDir, filename), "wb")
             shutil.copyfileobj(source, target)
             source.close()
             target.close()
@@ -1198,7 +1234,7 @@ def extractZip(archive, targetDir):
         return False
 
 
-def backupConfigZip(fileList, archive, arcname=None):
+def backup_config_zip(fileList, archive, arcname=None):
     """
     Store the config file as a ZIP
 
@@ -1219,7 +1255,7 @@ def backupConfigZip(fileList, archive, arcname=None):
         return False
 
 
-def restoreConfigZip(archive, targetDir):
+def restore_config_zip(archive, targetDir):
     """
     Restores a Config ZIP file back in place
 
@@ -1364,15 +1400,47 @@ def getURL(url, post_data=None, params=None, headers=None,  # pylint:disable=too
 
         hooks, cookies, verify, proxies = request_defaults(kwargs)
 
-        if params and isinstance(params, (list, dict)):
-            for param in params:
-                if isinstance(params[param], unicode):
-                    params[param] = params[param].encode('utf-8')
+        # Dict, loop through and change all key,value pairs to bytes
+        if isinstance(params, dict):
+            for key, value in six.iteritems(params):
+                if isinstance(key, six.text_type):
+                    del params[key]
+                    key = key.encode('utf-8')
 
-        if post_data and isinstance(post_data, (list, dict)):
-            for param in post_data:
-                if isinstance(post_data[param], unicode):
-                    post_data[param] = post_data[param].encode('utf-8')
+                if isinstance(value, six.text_type):
+                    value = value.encode('utf-8')
+                params[key] = value
+
+        if isinstance(post_data, dict):
+            for key, value in six.iteritems(post_data):
+                if isinstance(key, six.text_type):
+                    del post_data[key]
+                    key = key.encode('utf-8')
+
+                if isinstance(value, six.text_type):
+                    value = value.encode('utf-8')
+                post_data[key] = value
+
+        # List, loop through and change all indexes to bytes
+        if isinstance(params, list):
+            for index, value in enumerate(params):
+                if isinstance(value, six.text_type):
+                    params[index] = value.encode('utf-8')
+
+        if isinstance(post_data, list):
+            for index, value in enumerate(post_data):
+                if isinstance(value, six.text_type):
+                    post_data[index] = value.encode('utf-8')
+
+        # Unicode, encode to bytes
+        if isinstance(params, six.text_type):
+            params = params.encode('utf-8')
+
+        if isinstance(post_data, six.text_type):
+            post_data = post_data.encode('utf-8')
+
+        if isinstance(url, six.text_type):
+            url = url.encode('utf-8')
 
         resp = session.request(
             'POST' if post_data else 'GET', url, data=post_data or {}, params=params or {},
@@ -1437,7 +1505,7 @@ def handle_requests_exception(requests_exception):  # pylint: disable=too-many-b
         if ssl.OPENSSL_VERSION_INFO < (1, 0, 1, 5):
             logger.log("SSL Error requesting url: '{0}' You have {1}, try upgrading OpenSSL to 1.0.1e+".format(error.request.url, ssl.OPENSSL_VERSION))
         if sickbeard.SSL_VERIFY:
-            logger.log("SSL Error requesting url: '{0}' Try disabling Cert Verification on the advanced tab of /config/general")
+            logger.log("SSL Error requesting url: '{0}' Try disabling Cert Verification on the advanced tab of /config/general".format(error.request.url))
         logger.log(default.format(error), logger.DEBUG)
         logger.log(traceback.format_exc(), logger.DEBUG)
 
@@ -1473,6 +1541,12 @@ def handle_requests_exception(requests_exception):  # pylint: disable=too-many-b
         logger.log(default.format(error))
     except requests.exceptions.URLRequired as error:
         logger.log(default.format(error))
+    except TypeError as error:
+        logger.log(default.format(error), logger.ERROR)
+        logger.log('url is {0}'.format(repr(requests_exception.request.url)))
+        logger.log('headers are {0}'.format(repr(requests_exception.request.headers)))
+        logger.log('params are {0}'.format(repr(requests_exception.request.params)))
+        logger.log('post_data is {0}'.format(repr(requests_exception.request.data)))
     except Exception as error:
         logger.log(default.format(error), logger.ERROR)
         logger.log(traceback.format_exc(), logger.DEBUG)
@@ -1493,6 +1567,10 @@ def get_size(start_path='.'):
     for dirpath, dirnames_, filenames in ek(os.walk, start_path):
         for f in filenames:
             fp = ek(os.path.join, dirpath, f)
+            if ek(os.path.islink, fp) and not ek(os.path.isfile, fp):
+                logger.log("Unable to get size for file {0} because the link to the file is not valid".format(fp),
+                           logger.DEBUG if sickbeard.IGNORE_BROKEN_SYMLINKS else logger.WARNING)
+                continue
             try:
                 total_size += ek(os.path.getsize, fp)
             except OSError as error:
@@ -1524,7 +1602,7 @@ def generateCookieSecret():
 def disk_usage(path):
     if platform.system() == 'Windows':
         free = ctypes.c_ulonglong(0)
-        if ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(unicode(path)), None, None, ctypes.pointer(free)) == 0:
+        if ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(six.text_type(path)), None, None, ctypes.pointer(free)) == 0:
             raise ctypes.WinError()
         return free.value
 
@@ -1550,7 +1628,7 @@ def verify_freespace(src, dest, oldfile=None, method="copy"):
     Checks if the target system has enough free space to copy or move a file.
 
     :param src: Source filename
-    :param dest: Destination path
+    :param dest: Destination path (show dir in current usage)
     :param oldfile: File to be replaced (defaults to None)
     :return: True if there is enough space for the file, False if there isn't. Also returns True if the OS doesn't support this option
     """
@@ -1564,19 +1642,22 @@ def verify_freespace(src, dest, oldfile=None, method="copy"):
         logger.log("A path to a file is required for the source. {0} is not a file.".format(src), logger.WARNING)
         return True
 
-    if not (ek(os.path.exists, dest) or ek(os.path.exists, ek(os.path.dirname, dest))):
+    if not (ek(os.path.isdir, dest) or (sickbeard.CREATE_MISSING_SHOW_DIRS and ek(os.path.isdir, ek(os.path.dirname, dest)))):
         logger.log("A path is required for the destination. Check the root dir and show locations are correct for {0} (I got '{1}')".format(
             oldfile[0].name, dest), logger.WARNING)
         return False
 
+    dest = (ek(os.path.dirname, dest), dest)[ek(os.path.isdir, dest)]
+
     # shortcut: if we are moving the file and the destination == src dir,
     # then by definition there is enough space
-    if method == "move" and ek(os.stat, src).st_dev == ek(os.stat, dest if ek(os.path.exists, dest) else ek(os.path.dirname, dest)).st_dev:  # pylint: disable=no-member
+    if method == "move" and ek(os.stat, src).st_dev == ek(os.stat, dest).st_dev:  # pylint:
+        # disable=no-member
         logger.log("Process method is 'move' and src and destination are on the same device, skipping free space check", logger.INFO)
         return True
 
     try:
-        disk_free = disk_usage(dest if ek(os.path.exists, dest) else ek(os.path.dirname, dest))
+        disk_free = disk_usage(dest)
     except Exception as error:
         logger.log("Unable to determine free space, so I will assume there is enough.", logger.WARNING)
         logger.log("Error: {error}".format(error=error), logger.DEBUG)
@@ -1688,7 +1769,7 @@ def tvdbid_from_remote_id(indexer_id, indexer):  # pylint:disable=too-many-retur
         if data is None:
             return tvdb_id
         try:
-            tree = ET.fromstring(data)
+            tree = ElementTree.fromstring(data)
             for show in tree.getiterator("Series"):
                 tvdb_id = show.findtext("seriesid")
 
@@ -1702,7 +1783,7 @@ def tvdbid_from_remote_id(indexer_id, indexer):  # pylint:disable=too-many-retur
         if data is None:
             return tvdb_id
         try:
-            tree = ET.fromstring(data)
+            tree = ElementTree.fromstring(data)
             for show in tree.getiterator("Series"):
                 tvdb_id = show.findtext("seriesid")
 
@@ -1722,16 +1803,21 @@ def tvdbid_from_remote_id(indexer_id, indexer):  # pylint:disable=too-many-retur
 
 
 def get_showname_from_indexer(indexer, indexer_id, lang='en'):
-    lINDEXER_API_PARMS = sickbeard.indexerApi(indexer).api_params.copy()
-    lINDEXER_API_PARMS['language'] = lang or sickbeard.INDEXER_DEFAULT_LANGUAGE
+    try:
+        lINDEXER_API_PARMS = sickbeard.indexerApi(indexer).api_params.copy()
+        lINDEXER_API_PARMS['language'] = lang or sickbeard.INDEXER_DEFAULT_LANGUAGE
 
-    logger.log('{0}: {1!r}'.format(sickbeard.indexerApi(indexer).name, lINDEXER_API_PARMS))
+        logger.log('{0}: {1!r}'.format(sickbeard.indexerApi(indexer).name, lINDEXER_API_PARMS))
 
-    t = sickbeard.indexerApi(indexer).indexer(**lINDEXER_API_PARMS)
-    s = t[int(indexer_id)]
+        t = sickbeard.indexerApi(indexer).indexer(**lINDEXER_API_PARMS)
+        s = t[int(indexer_id)]
 
-    if hasattr(s, 'data'):
-        return s.data.get('seriesname')
+        if hasattr(s, 'data'):
+            return s.data.get('seriesname')
+    except (sickbeard.indexer_error, IOError) as e:
+        logger.log("Show id " + str(indexer_id) + " not found on " + sickbeard.indexerApi(indexer).name +
+                   ", not adding show: " + ex(e), logger.WARNING)
+        return None
 
     return None
 
@@ -1754,18 +1840,78 @@ MESSAGE_COUNTER = 0
 
 
 def add_site_message(message, level='danger'):
-    to_add = dict(level=level, message=message)
+    with sickbeard.MESSAGES_LOCK:
+        to_add = dict(level=level, message=message)
 
-    for index, existing in sickbeard.SITE_MESSAGES.iteritems():
-        if re.sub(r'\d+', '#', existing['message']) == re.sub(r'\d+', '#', message):
-            sickbeard.SITE_MESSAGES[index] = to_add
-            return
+        basic_update_url = sickbeard.versionChecker.UpdateManager.get_update_url().split('?')[0]
+        for index, existing in six.iteritems(sickbeard.SITE_MESSAGES):
+            if basic_update_url in existing['message'] and basic_update_url in message:
+                sickbeard.SITE_MESSAGES[index] = to_add
+                return
 
-        if message.endswith('Please use \'master\' unless specifically asked') and \
-                existing['message'].endswith('Please use \'master\' unless specifically asked'):
-            sickbeard.SITE_MESSAGES[index] = to_add
-            return
+            if message.endswith('Please use \'master\' unless specifically asked') and \
+                    existing['message'].endswith('Please use \'master\' unless specifically asked'):
+                sickbeard.SITE_MESSAGES[index] = to_add
+                return
 
-    global MESSAGE_COUNTER
-    MESSAGE_COUNTER += 1
-    sickbeard.SITE_MESSAGES[MESSAGE_COUNTER] = to_add
+            if message.startswith('No NZB/Torrent providers found or enabled for') and \
+                    existing['message'].startswith('No NZB/Torrent providers found or enabled for'):
+                sickbeard.SITE_MESSAGES[index] = to_add
+                return
+
+        global MESSAGE_COUNTER
+        MESSAGE_COUNTER += 1
+        sickbeard.SITE_MESSAGES[MESSAGE_COUNTER] = to_add
+
+
+def remove_site_message(begins='', ends='', contains='', key=None):
+    with sickbeard.MESSAGES_LOCK:
+        if key is not None and int(key) in sickbeard.SITE_MESSAGES:
+            del sickbeard.SITE_MESSAGES[int(key)]
+
+        for index, existing in six.iteritems(sickbeard.SITE_MESSAGES.copy()):
+            checks = []
+            if begins and isinstance(begins, six.string_types):
+                checks.append(existing['message'].startswith(begins))
+            if ends and isinstance(ends, six.string_types):
+                checks.append(existing['message'].endsswith(ends))
+            if contains and isinstance(ends, six.string_types):
+                checks.append(contains in existing['message'])
+
+            if all(checks):
+                del sickbeard.SITE_MESSAGES[index]
+
+
+def sortable_name(name):
+    if not sickbeard.SORT_ARTICLE:
+        name = re.sub(r'(?:The|A|An)\s', '', name, flags=re.I)
+    return name.lower()
+
+
+def manage_torrents_url(reset=False):
+    if not reset:
+        return sickbeard.CLIENT_WEB_URLS.get('torrent', '')
+
+    if not sickbeard.USE_TORRENTS or not sickbeard.TORRENT_HOST.lower().startswith('http') or sickbeard.TORRENT_METHOD == 'blackhole' or \
+            sickbeard.ENABLE_HTTPS and not sickbeard.TORRENT_HOST.lower().startswith('https'):
+        sickbeard.CLIENT_WEB_URLS['torrent'] = ''
+        return sickbeard.CLIENT_WEB_URLS.get('torrent')
+
+    torrent_ui_url = re.sub('localhost|127.0.0.1', sickbeard.LOCALHOST_IP or get_lan_ip(), sickbeard.TORRENT_HOST or '', re.I)
+
+    def test_exists(url):
+        try:
+            h = requests.head(url)
+            return h.status_code != 404
+        except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout):
+            return False
+
+    if sickbeard.TORRENT_METHOD == 'utorrent':
+        torrent_ui_url = '/'.join(s.strip('/') for s in (torrent_ui_url, 'gui/'))
+    elif sickbeard.TORRENT_METHOD == 'download_station':
+        if test_exists(urljoin(torrent_ui_url, 'download/')):
+            torrent_ui_url = urljoin(torrent_ui_url, 'download/')
+
+    sickbeard.CLIENT_WEB_URLS['torrent'] = ('', torrent_ui_url)[test_exists(torrent_ui_url)]
+
+    return sickbeard.CLIENT_WEB_URLS.get('torrent')

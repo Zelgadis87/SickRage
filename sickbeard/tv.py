@@ -1,6 +1,6 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -26,6 +26,8 @@ import re
 import stat
 import threading
 import traceback
+
+from unidecode import unidecode
 
 try:
     import xml.etree.cElementTree as etree
@@ -61,13 +63,13 @@ from sickrage.helper.exceptions import ShowNotFoundException
 from sickrage.show.Show import Show
 
 from sickbeard.common import Quality, Overview, statusStrings
-from sickbeard.common import DOWNLOADED, SNATCHED, SNATCHED_PROPER, ARCHIVED, IGNORED, UNAIRED, WANTED, SKIPPED, UNKNOWN
+from sickbeard.common import DOWNLOADED, SNATCHED, SNATCHED_PROPER, ARCHIVED, IGNORED, UNAIRED, WANTED, SKIPPED, \
+                             UNKNOWN, FAILED
 from sickbeard.common import NAMING_DUPLICATE, NAMING_EXTEND, NAMING_LIMITED_EXTEND, NAMING_SEPARATED_REPEAT, \
     NAMING_LIMITED_EXTEND_E_PREFIXED
 
 import shutil
-
-
+import six
 
 
 def dirty_setter(attr_name):
@@ -168,7 +170,11 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
 
     @property
     def network_logo_name(self):
-        return self.network.replace('\u00C9', 'e').replace('\u00E9', 'e').lower()
+        return unidecode(self.network).lower()
+
+    @property
+    def sort_name(self):
+        return helpers.sortable_name(self.name)
 
     def _getLocation(self):
         # no dir check needed if missing show dirs are created during post-processing
@@ -756,7 +762,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
 
         # logger.log(str(self.indexerid) + ": Loading show info from database", logger.DEBUG)
 
-        main_db_con = db.DBConnection()
+        main_db_con = db.DBConnection(row_type='dict')
         sql_results = main_db_con.select("SELECT s.*, (SELECT coalesce(max(last_watched),0) FROM tv_episodes e WHERE e.indexer = s.indexer AND e.showid = s.indexer_id) last_seen FROM tv_shows s WHERE s.indexer_id = ?", [self.indexerid])
 
         if len(sql_results) > 1:
@@ -921,7 +927,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
 
         for key in [x for x in imdb_info.keys() if x.replace('_', ' ') in imdbTv.keys()]:
             # Store only the first value for string type
-            if isinstance(imdb_info[key], basestring) and isinstance(imdbTv.get(key.replace('_', ' ')), list):
+            if isinstance(imdb_info[key], six.string_types) and isinstance(imdbTv.get(key.replace('_', ' ')), list):
                 imdb_info[key] = imdbTv.get(key.replace('_', ' '))[0]
             else:
                 imdb_info[key] = imdbTv.get(key.replace('_', ' '))
@@ -966,7 +972,7 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
 
         # Rename dict keys without spaces for DB upsert
         self.imdb_info = dict(
-            (k.replace(' ', '_'), k(v) if hasattr(v, 'keys') else v) for k, v in imdb_info.iteritems())
+            (k.replace(' ', '_'), k(v) if hasattr(v, 'keys') else v) for k, v in six.iteritems(imdb_info))
         logger.log(str(self.indexerid) + ": Obtained info from IMDb ->" + str(self.imdb_info), logger.DEBUG)
 
     def nextEpisode(self):
@@ -1244,21 +1250,23 @@ class TVShow(object):  # pylint: disable=too-many-instance-attributes, too-many-
         curStatus_, curQuality = Quality.splitCompositeStatus(epStatus)
 
         # if it's one of these then we want it as long as it's in our allowed initial qualities
-        if epStatus in (WANTED, SKIPPED, UNKNOWN):
+        if epStatus in (WANTED, SKIPPED, UNKNOWN, FAILED):
             logger.log("Existing episode status is '{status}', getting found result for {name} {ep} with quality {quality}".format
                        (status=epStatus_text, name=self.name, ep=episode_num(season, episode),
                         quality=Quality.qualityStrings[quality]), logger.DEBUG)
             return True
         elif manualSearch:
-            if (downCurQuality and quality >= curQuality) or (not downCurQuality and quality > curQuality):
+            if (downCurQuality and quality >= curQuality) or (not downCurQuality and quality != curQuality):
                 logger.log("Usually ignoring found result, but forced search allows the quality,"
                            " getting found result for {name} {ep} with quality {quality}".format
                            (name=self.name, ep=episode_num(season, episode), quality=Quality.qualityStrings[quality]),
                            logger.DEBUG)
                 return True
 
-        # if we are re-downloading then we only want it if it's in our preferred_qualities list and better than what we have, or we only have one bestQuality and we do not have that quality yet
-        if epStatus in Quality.DOWNLOADED + Quality.SNATCHED + Quality.SNATCHED_PROPER and quality in preferred_qualities and (quality > curQuality or curQuality not in preferred_qualities):
+        # if we are re-downloading then we only want it if it's in our preferred_qualities list and better than what we have,
+        # or we only have one bestQuality and we do not have that quality yet
+        if (epStatus in Quality.DOWNLOADED + Quality.SNATCHED + Quality.SNATCHED_PROPER and quality in preferred_qualities
+            and (quality > curQuality or curQuality not in preferred_qualities)):
             logger.log("Episode already exists with quality {existing_quality} but the found result"
                        " quality {new_quality} is wanted more, getting found result for {name} {ep}".format
                        (existing_quality=Quality.qualityStrings[curQuality],
@@ -1411,7 +1419,6 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
             self.saveToDB()
 
     def download_subtitles(self, force=False, force_lang=None):
-        force_ = force
         if not ek(os.path.isfile, self.location):
             logger.log("{id}: Episode file doesn't exist, can't download subtitles for {ep}".format
                        (id=self.show.indexerid, ep=episode_num(self.season, self.episode)),
@@ -1530,7 +1537,7 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
                 self.subtitles = sql_results[0][b"subtitles"].split(",")
             self.subtitles_searchcount = sql_results[0][b"subtitles_searchcount"]
             self.subtitles_lastsearch = sql_results[0][b"subtitles_lastsearch"]
-            self.airdate = datetime.date.fromordinal(long(sql_results[0][b"airdate"]))
+            self.airdate = datetime.date.fromordinal(int(sql_results[0][b"airdate"]))
             # logger.log("1 Status changes from " + str(self.status) + " to " + str(sql_results[0][b"status"]), logger.DEBUG)
             self.status = int(sql_results[0][b"status"] or -1)
 
@@ -2340,7 +2347,7 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
                             ep_string += '-' + "{#:03d}".format(**{"#": relEp.episode})
 
             regex_replacement = None
-            if anime_type == 2:
+            if anime_type == 2 and not ep_only_match:
                 regex_replacement = r'\g<pre_sep>' + ep_string + r'\g<post_sep>'
             elif season_ep_match:
                 regex_replacement = r'\g<pre_sep>\g<2>\g<3>' + ep_string + r'\g<post_sep>'
@@ -2456,14 +2463,16 @@ class TVEpisode(object):  # pylint: disable=too-many-instance-attributes, too-ma
                        logger.DEBUG)
             return
 
+        # get related files
         related_files = postProcessor.PostProcessor(self.location).list_associated_files(
-            self.location, subfolders=True)
+            self.location, subfolders=True, rename=True)
 
-        # This is wrong. Cause of pp not moving subs.
-        if self.show.subtitles and sickbeard.SUBTITLES_DIR != '':
+        # get related subs
+        if self.show.subtitles and sickbeard.SUBTITLES_DIR:
+            # assume that the video file is in the subtitles dir to find associated subs
+            subs_path = os.path.join(sickbeard.SUBTITLES_DIR, ek(os.path.basename, self.location))
             related_subs = postProcessor.PostProcessor(self.location).list_associated_files(
-                sickbeard.SUBTITLES_DIR, subtitles_only=True, subfolders=True)
-            absolute_proper_subs_path = ek(os.path.join, sickbeard.SUBTITLES_DIR, self.formatted_filename())
+                subs_path, subtitles_only=True, subfolders=True, rename=True)
 
         logger.log("Files associated to " + self.location + ": " + str(related_files), logger.DEBUG)
 

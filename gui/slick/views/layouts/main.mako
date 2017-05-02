@@ -50,6 +50,7 @@
         <meta data-var="anonURL" data-content="${sickbeard.ANON_REDIRECT}">
 
         <meta data-var="sickbeard.ANIME_SPLIT_HOME" data-content="${sickbeard.ANIME_SPLIT_HOME}">
+        <meta data-var="sickbeard.ANIME_SPLIT_HOME_IN_TABS" data-content="${sickbeard.ANIME_SPLIT_HOME_IN_TABS}">
         <meta data-var="sickbeard.COMING_EPS_LAYOUT" data-content="${sickbeard.COMING_EPS_LAYOUT}">
         <meta data-var="sickbeard.COMING_EPS_SORT" data-content="${sickbeard.COMING_EPS_SORT}">
         <meta data-var="sickbeard.DATE_PRESET" data-content="${sickbeard.DATE_PRESET}">
@@ -93,11 +94,15 @@
         <link rel="stylesheet" type="text/css" href="${srRoot}/css/print.css?${sbPID}" />
         <link rel="stylesheet" type="text/css" href="${srRoot}/css/country-flags.css?${sbPID}"/>
 
-        %if sickbeard.THEME_NAME != "light":
+        % if sickbeard.THEME_NAME != "light":
             <link rel="stylesheet" type="text/css" href="${srRoot}/css/${sickbeard.THEME_NAME}.css?${sbPID}" />
-        %endif
+        % endif
 
         <%block name="css" />
+
+        % if sickbeard.CUSTOM_CSS:
+            <link rel="stylesheet" type="text/css" href="${srRoot}/ui/custom.css" />
+        % endif
     </head>
     <body data-controller="${controller}" data-action="${action}">
         <nav class="navbar navbar-default navbar-fixed-top hidden-print" role="navigation">
@@ -158,8 +163,8 @@
                                     % if sickbeard.USE_EMBY and sickbeard.EMBY_HOST != "" and sickbeard.EMBY_APIKEY != "":
                                         <li><a href="${srRoot}/home/updateEMBY/"><i class="menu-icon-emby"></i>&nbsp;${_('Update Emby')}</a></li>
                                     % endif
-                                    % if sickbeard.USE_TORRENTS and sickbeard.TORRENT_METHOD != 'blackhole' and (sickbeard.ENABLE_HTTPS and sickbeard.TORRENT_HOST[:5] == 'https' or not sickbeard.ENABLE_HTTPS and sickbeard.TORRENT_HOST[:5] == 'http:'):
-                                        <li><a href="${srRoot}/manage/manageTorrents/"><i class="fa fa-download"></i>&nbsp;${_('Manage Torrents')}</a></li>
+                                    % if manage_torrents_url:
+                                        <li><a href="${manage_torrents_url}" target="_blank"><i class="fa fa-download"></i>&nbsp;${_('Manage Torrents')}</a></li>
                                     % endif
                                     % if sickbeard.USE_FAILED_DOWNLOADS:
                                         <li><a href="${srRoot}/manage/failedDownloads/"><i class="fa fa-thumbs-o-down"></i>&nbsp;${_('Failed Downloads')}</a></li>
@@ -229,7 +234,7 @@
                                     <li><a href="${srRoot}/home/updateCheck?pid=${sbPID}"><i class="fa fa-wrench"></i>&nbsp;${_('Check For Updates')}</a></li>
                                     <li><a href="${srRoot}/home/restart/?pid=${sbPID}" class="confirm restart"><i class="fa fa-repeat"></i>&nbsp;${_('Restart')}</a></li>
                                     <li><a href="${srRoot}/home/shutdown/?pid=${sbPID}" class="confirm shutdown"><i class="fa fa-power-off"></i>&nbsp;${_('Shutdown')}</a></li>
-                                    % if srLogin is not True:
+                                    % if srLogin:
                                         <li><a href="${srRoot}/logout" class="confirm logout"><i class="fa fa-sign-out"></i>&nbsp;${_('Logout')}</a></li>
                                     % endif
                                     <li role="separator" class="divider"></li>
@@ -332,9 +337,7 @@
                     </div>
                 </div>
                 <script type="text/javascript" src="${srRoot}/js/vender.min.js?${sbPID}"></script>
-                <script type="text/javascript" src="${srRoot}/js/lib/jquery.cookiejar.js?${sbPID}"></script>
                 <script type="text/javascript" src="${srRoot}/js/lib/jquery.form.min.js?${sbPID}"></script>
-                <script type="text/javascript" src="${srRoot}/js/lib/jquery.json-2.2.min.js?${sbPID}"></script>
                 <script type="text/javascript" src="${srRoot}/js/lib/jquery.selectboxes.min.js?${sbPID}"></script>
                 <script type="text/javascript" src="${srRoot}/js/lib/formwizard.js?${sbPID}"></script><!-- Can't be added to bower -->
                 <script type="text/javascript" src="${srRoot}/js/parsers.js?${sbPID}"></script>
