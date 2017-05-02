@@ -2939,7 +2939,7 @@ class HomeAddShows(Home):
         # prepare the inputs for passing along
         scene = config.checkbox_to_value(scene)
         anime = config.checkbox_to_value(anime)
-        season_folders = config.checkbox_to_value(flatten_folders)
+        season_folders = config.checkbox_to_value(season_folders)
         stay_ahead = int(stay_ahead)
         subtitles = config.checkbox_to_value(subtitles)
         subtitles_sr_metadata = config.checkbox_to_value(subtitles_sr_metadata)
