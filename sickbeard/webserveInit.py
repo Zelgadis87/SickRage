@@ -1,8 +1,11 @@
 # coding=utf-8
+
+from __future__ import print_function, unicode_literals
+
 import os
 import threading
+from socket import error as SocketError, errno
 
-from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.routes import route
 from tornado.web import Application, RedirectHandler, StaticFileHandler
@@ -61,12 +64,12 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             if not (self.https_cert and ek(os.path.exists, self.https_cert)) or not (
                     self.https_key and ek(os.path.exists, self.https_key)):
                 if not create_https_certificates(self.https_cert, self.https_key):
-                    logger.log(u"Unable to create CERT/KEY files, disabling HTTPS")
+                    logger.log("Unable to create CERT/KEY files, disabling HTTPS")
                     sickbeard.ENABLE_HTTPS = False
                     self.enable_https = False
 
             if not (ek(os.path.exists, self.https_cert) and ek(os.path.exists, self.https_key)):
-                logger.log(u"Disabled HTTPS because of missing CERT and KEY files", logger.WARNING)
+                logger.log("Disabled HTTPS because of missing CERT and KEY files", logger.WARNING)
                 sickbeard.ENABLE_HTTPS = False
                 self.enable_https = False
 
@@ -96,7 +99,7 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             (r'{0}/logout(/?)'.format(self.options['web_root']), LogoutHandler),
 
             # Web calendar handler (Needed because option Unprotected calendar)
-            (r'{0}/calendar'.format(self.options['web_root']), CalendarHandler),
+            (r'{0}/calendar(/?)'.format(self.options['web_root']), CalendarHandler),
 
             # webui handlers
         ] + route.get_routes(self.options['web_root']))
@@ -140,17 +143,24 @@ class SRWebServer(threading.Thread):  # pylint: disable=too-many-instance-attrib
             protocol = "http"
             ssl_options = None
 
-        logger.log(u"Starting SickRage on " + protocol + "://" + str(self.options['host']) + ":" + str(
+        logger.log("Starting SickRage on " + protocol + "://" + str(self.options['host']) + ":" + str(
             self.options['port']) + "/")
 
         try:
             self.server = self.app.listen(self.options['port'], self.options['host'], ssl_options=ssl_options,
                                           xheaders=sickbeard.HANDLE_REVERSE_PROXY, protocol=protocol)
-        except Exception:
-            if sickbeard.LAUNCH_BROWSER and not self.daemon:
-                sickbeard.launchBrowser('https' if sickbeard.ENABLE_HTTPS else 'http', self.options['port'], sickbeard.WEB_ROOT)
-                logger.log(u"Launching browser and exiting")
-            logger.log(u"Could not start webserver on port {0}, already in use!".format(self.options['port']))
+        except SocketError as ex:
+            err_msg = ""
+            if ex.errno == errno.EADDRINUSE:  # Address/port combination already in use
+                if sickbeard.LAUNCH_BROWSER and not self.daemon:
+                    sickbeard.launchBrowser('https' if sickbeard.ENABLE_HTTPS else 'http', self.options['port'], sickbeard.WEB_ROOT)
+                    logger.log("Launching browser and exiting")
+                err_msg = "already in use!"
+
+            logger.log("Could not start webserver on port {0}: {1}".format(self.options['port'], err_msg or ex))
+            os._exit(1)  # pylint: disable=protected-access
+        except Exception as ex:
+            logger.log("Could not start webserver on port {0}: {1}".format(self.options['port'], ex))
             os._exit(1)  # pylint: disable=protected-access
 
         try:

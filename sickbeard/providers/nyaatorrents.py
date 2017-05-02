@@ -18,7 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import unicode_literals
+from __future__ import print_function, unicode_literals
 
 import re
 
@@ -55,10 +55,10 @@ class NyaaProvider(TorrentProvider):  # pylint: disable=too-many-instance-attrib
 
         for mode in search_strings:
             items = []
-            logger.log(u'Search Mode: {0}'.format(mode), logger.DEBUG)
+            logger.log('Search Mode: {0}'.format(mode), logger.DEBUG)
             for search_string in search_strings[mode]:
                 if mode != 'RSS':
-                    logger.log(u'Search string: {0}'.format
+                    logger.log('Search string: {0}'.format
                                (search_string.decode('utf-8')), logger.DEBUG)
 
                 search_params = {
@@ -71,7 +71,7 @@ class NyaaProvider(TorrentProvider):  # pylint: disable=too-many-instance-attrib
                     search_params['term'] = search_string
 
                 results = []
-                data = self.cache.getRSSFeed(self.url, params=search_params)['entries']
+                data = self.cache.get_rss_feed(self.url, params=search_params)['entries']
                 if not data:
                     logger.log('Data returned from provider does not contain any torrents', logger.DEBUG)
 

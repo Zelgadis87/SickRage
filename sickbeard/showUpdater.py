@@ -1,6 +1,6 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -52,9 +52,9 @@ class ShowUpdater(object):  # pylint: disable=too-few-public-methods
         cache_db_con = db.DBConnection('cache.db')
         result = cache_db_con.select('SELECT `time` FROM lastUpdate WHERE provider = ?', ['theTVDB'])
         if result:
-            last_update = long(result[0][0])
+            last_update = int(result[0][0])
         else:
-            last_update = long(time.mktime(datetime.datetime.min.timetuple()))
+            last_update = int(time.mktime(datetime.datetime.min.timetuple()))
             cache_db_con.action('INSERT INTO lastUpdate (provider, `time`) VALUES (?, ?)', ['theTVDB', last_update])
 
         network_timezones.update_network_dict()
@@ -84,9 +84,9 @@ class ShowUpdater(object):  # pylint: disable=too-few-public-methods
                 cur_show.nextEpisode()
                 if sickbeard.indexerApi(cur_show.indexer).name == 'theTVDB':
                     if cur_show.indexerid in updated_shows:
-                        pi_list.append(sickbeard.showQueueScheduler.action.updateShow(cur_show, True))
+                        pi_list.append(sickbeard.showQueueScheduler.action.update_show(cur_show, True))
                     else:
-                        pi_list.append(sickbeard.showQueueScheduler.action.refreshShow(cur_show, False))
+                        pi_list.append(sickbeard.showQueueScheduler.action.refresh_show(cur_show, False))
             except (CantUpdateShowException, CantRefreshShowException) as error:
                 logger.log('Automatic update failed: {0}'.format(ex(error)), logger.DEBUG)
 

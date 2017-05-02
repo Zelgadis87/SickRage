@@ -1,6 +1,6 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-# URL: http://code.google.com/p/sickbeard/
+# URL: https://sickrage.github.io
 #
 # This file is part of SickRage.
 #
@@ -18,6 +18,8 @@
 # along with SickRage. If not, see <http://www.gnu.org/licenses/>.
 
 # all regexes are case insensitive
+
+from __future__ import print_function, unicode_literals
 
 normal_regexes = [
     ('standard_repeat',
@@ -347,13 +349,15 @@ anime_regexes = [
      # Show.Name.S01E02E03.Source.Quality.Etc-Group
      # Show Name - S01E02-03 - My Ep Name
      # Show.Name.S01.E02.E03
+     # Show Name - S01E02
+     # Show Name - S01E02-03
      r'''
      ^((?P<series_name>.+?)[. _-]+)?             # Show_Name and separator
      (\()?s(?P<season_num>\d+)[. _-]*            # S01 and optional separator
      e(?P<ep_num>\d+)(\))?                       # E02 and separator
      (([. _-]*e|-)                               # linking e/- char
      (?P<extra_ep_num>(?!(1080|720|480)[pi])\d+)(\))?)*   # additional E03/etc
-     [. _-]+((?P<extra_info>.+?)                 # Source_Quality_Etc-
+     ([. _-]+((?P<extra_info>.+?))?              # Source_Quality_Etc-
      ((?<![. _-])(?<!WEB)                        # Make sure this is really the release group
      -(?P<release_group>[^ -]+([. _-]\[.*\])?))?)?$              # Group
      '''),

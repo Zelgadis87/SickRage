@@ -22,7 +22,7 @@
 Custom Logger for SickRage
 """
 
-from __future__ import unicode_literals
+from __future__ import print_function, unicode_literals
 
 import io
 import locale
@@ -35,9 +35,12 @@ import sys
 import threading
 import traceback
 from logging import NullHandler
-from urllib import quote
 
-from github import InputFileContent
+import six
+from github import InputFileContent, RateLimitExceededException, TwoFactorException
+
+# noinspection PyUnresolvedReferences
+from six.moves.urllib.parse import quote
 
 import sickbeard
 from sickbeard import classes
@@ -81,17 +84,17 @@ class CensoredFormatter(logging.Formatter, object):
         """
         msg = super(CensoredFormatter, self).format(record)
 
-        if not isinstance(msg, unicode):
+        if not isinstance(msg, six.text_type):
             msg = msg.decode(self.encoding, 'replace')  # Convert to unicode
 
         # set of censored items
-        censored = {item for _, item in censored_items.iteritems() if item}
+        censored = {item for _, item in six.iteritems(censored_items) if item}
         # set of censored items and urlencoded counterparts
         censored = censored | {quote(item) for item in censored}
         # convert set items to unicode and typecast to list
         censored = list({
             item.decode(self.encoding, 'replace')
-            if not isinstance(item, unicode) else item
+            if not isinstance(item, six.text_type) else item
             for item in censored
         })
         # sort the list in order of descending length so that entire item is censored
@@ -178,7 +181,9 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
 
         # rotating log file handler
         if self.file_logging:
-            rfh = logging.handlers.RotatingFileHandler(self.log_file, maxBytes=int(sickbeard.LOG_SIZE * 1048576), backupCount=sickbeard.LOG_NR, encoding='utf-8')
+            rfh = logging.handlers.RotatingFileHandler(
+                self.log_file, maxBytes=int(sickbeard.LOG_SIZE * 1048576), backupCount=sickbeard.LOG_NR, encoding='utf-8'
+            )
             rfh.setFormatter(CensoredFormatter('%(asctime)s %(levelname)-8s %(message)s', dateTimeFormat))
             rfh.setLevel(log_level)
 
@@ -223,7 +228,7 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
             thread=cur_thread, hash=cur_hash, message=msg)
 
         # Change the SSL error to a warning with a link to information about how to fix it.
-        # Check for u'error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:590)'
+        # Check for 'error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:590)'
 
         ssl_errors = [
             r'error \[Errno \d+\] _ssl.c:\d+: error:\d+\s*:SSL routines:SSL23_GET_SERVER_HELLO:tlsv1 alert internal error',
@@ -240,14 +245,14 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
         elif level == WARNING:
             classes.WarningViewer.add(classes.UIError(message))
 
-        if level == ERROR:
-            self.logger.exception(message, *args, **kwargs)
-        else:
-            try:
+        try:
+            if level == ERROR:
+                self.logger.exception(message, *args, **kwargs)
+            else:
                 self.logger.log(level, message, *args, **kwargs)
-            except:
-                if msg: # Otherwise creates empty messages in log...
-                    print msg
+        except Exception:
+            if msg and msg.strip():  # Otherwise creates empty messages in log...
+                print(msg.strip())
 
     def log_error_and_exit(self, error_msg, *args, **kwargs):
         self.log(error_msg, ERROR, *args, **kwargs)
@@ -405,6 +410,13 @@ class Logger(object):  # pylint: disable=too-many-instance-attributes
                 if issue_id and cur_error in classes.ErrorViewer.errors:
                     # clear error from error list
                     classes.ErrorViewer.errors.remove(cur_error)
+        except RateLimitExceededException:
+            submitter_result = 'Your Github user has exceeded its API rate limit, please try again later'
+            issue_id = None
+        except TwoFactorException:
+            submitter_result = ('Your Github account requires Two-Factor Authentication, '
+                                'please change your auth method in the config')
+            issue_id = None
         except Exception:  # pylint: disable=broad-except
             self.log(traceback.format_exc(), ERROR)
             submitter_result = 'Exception generated in issue submitter, please check the log'
@@ -458,27 +470,27 @@ def submit_errors(*args, **kwargs):
 log_file = None
 
 LOG_FILTERS = {
-    '<NONE>': _(u'&lt;No Filter&gt;'),
-    'DAILYSEARCHER': _(u'Daily Searcher'),
-    'BACKLOG': _(u'Backlog'),
-    'SHOWUPDATER': _(u'Show Updater'),
-    'CHECKVERSION': _(u'Check Version'),
-    'SHOWQUEUE': _(u'Show Queue'),
-    'SEARCHQUEUE': _(u'Search Queue (All)'),
-    'SEARCHQUEUE-DAILY-SEARCH': _(u'Search Queue (Daily Searcher)'),
-    'SEARCHQUEUE-BACKLOG': _(u'Search Queue (Backlog)'),
-    'SEARCHQUEUE-MANUAL': _(u'Search Queue (Manual)'),
-    'SEARCHQUEUE-RETRY': _(u'Search Queue (Retry/Failed)'),
-    'SEARCHQUEUE-RSS': _(u'Search Queue (RSS)'),
-    'FINDPROPERS': _(u'Find Propers'),
-    'POSTPROCESSOR': _(u'Postprocessor'),
-    'FINDSUBTITLES': _(u'Find Subtitles'),
-    'TRAKTCHECKER': _(u'Trakt Checker'),
-    'EVENT': _(u'Event'),
-    'ERROR': _(u'Error'),
-    'TORNADO': _(u'Tornado'),
-    'Thread': _(u'Thread'),
-    'MAIN': _(u'Main'),
+    '<NONE>': _('&lt;No Filter&gt;'),
+    'DAILYSEARCHER': _('Daily Searcher'),
+    'BACKLOG': _('Backlog'),
+    'SHOWUPDATER': _('Show Updater'),
+    'CHECKVERSION': _('Check Version'),
+    'SHOWQUEUE': _('Show Queue'),
+    'SEARCHQUEUE': _('Search Queue (All)'),
+    'SEARCHQUEUE-DAILY-SEARCH': _('Search Queue (Daily Searcher)'),
+    'SEARCHQUEUE-BACKLOG': _('Search Queue (Backlog)'),
+    'SEARCHQUEUE-MANUAL': _('Search Queue (Manual)'),
+    'SEARCHQUEUE-RETRY': _('Search Queue (Retry/Failed)'),
+    'SEARCHQUEUE-RSS': _('Search Queue (RSS)'),
+    'FINDPROPERS': _('Find Propers'),
+    'POSTPROCESSOR': _('Postprocessor'),
+    'FINDSUBTITLES': _('Find Subtitles'),
+    'TRAKTCHECKER': _('Trakt Checker'),
+    'EVENT': _('Event'),
+    'ERROR': _('Error'),
+    'TORNADO': _('Tornado'),
+    'Thread': _('Thread'),
+    'MAIN': _('Main'),
 }
 
 
@@ -505,7 +517,7 @@ def log_data(min_level, log_filter, log_search, max_lines):
     for _log_file in log_files:
         if len(data) < max_lines:
             with io.open(_log_file, 'r', encoding='utf-8') as f:
-                data += [line for line in reversed(f.readlines()) if line]
+                data += [line.strip() + '\n' for line in reversed(f.readlines()) if line.strip()]
         else:
             break
 

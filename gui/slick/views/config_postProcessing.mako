@@ -1,5 +1,6 @@
 <%inherit file="/layouts/config.mako"/>
 <%!
+    import six
     import os.path
     import datetime
     import platform
@@ -107,7 +108,7 @@
                             <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                 <div class="row">
                                     <div class="col-md-12">
-                                        <input type="number" min="10" step="1" name="autopostprocessor_frequency" id="autopostprocessor_frequency" value="${sickbeard.AUTOPOSTPROCESSOR_FREQUENCY}" class="form-control input-sm input75"  title="autopostprocessor_frequency"/>
+                                        <input type="number" min="10" step="1" name="autopostprocessor_frequency" id="autopostprocessor_frequency" value="${sickbeard.AUTOPOSTPROCESSOR_FREQUENCY}" class="form-control input-sm input75" title="autopostprocessor_frequency"/>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -135,7 +136,7 @@
                             <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                 <div class="row">
                                     <div class="col-md-12">
-                                        <input type="text" name="sync_files" id="sync_files" value="${sickbeard.SYNC_FILES}" class="form-control input-sm input350" autocapitalize="off"  title="sync_files"/>
+                                        <input type="text" name="sync_files" id="sync_files" value="${sickbeard.SYNC_FILES}" class="form-control input-sm input350" autocapitalize="off" title="sync_files"/>
                                     </div>
                                 </div>
                                 <div class="row">
@@ -181,8 +182,18 @@
                                 <label class="component-title">${_('Move associated files')}</label>
                             </div>
                             <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
-                                <input type="checkbox" name="move_associated_files" id="move_associated_files" ${('', 'checked="checked"')[bool(sickbeard.MOVE_ASSOCIATED_FILES)]}/>
+                                <input type="checkbox" class="enabler" name="move_associated_files" id="move_associated_files" ${('', 'checked="checked"')[bool(sickbeard.MOVE_ASSOCIATED_FILES)]}/>
                                 <label for="move_associated_files">${_('move associated (srt/srr/sfv/etc) files while post processing?')}</label>
+                            </div>
+                        </div>
+
+                        <div class="field-pair row" id="content_move_associated_files">
+                            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12">
+                                <label class="component-title">${_('Rename .nfo file')}</label>
+                            </div>
+                            <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
+                                <input type="checkbox" name="nfo_rename" id="nfo_rename" ${('', 'checked="checked"')[bool(sickbeard.NFO_RENAME)]}/>
+                                <label for="nfo_rename">${_('rename the original .nfo file to .nfo-orig to avoid conflicts?')}</label>
                             </div>
                         </div>
 
@@ -212,16 +223,6 @@
                             <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                 <input type="checkbox" name="delete_non_associated_files" id="delete_non_associated_files" ${('', 'checked="checked"')[bool(sickbeard.DELETE_NON_ASSOCIATED_FILES)]}/>
                                 <label for="delete_non_associated_files">${_('delete non associated files while post processing?')}</label>
-                            </div>
-                        </div>
-
-                        <div class="field-pair row">
-                            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12">
-                                <label class="component-title">${_('Rename .nfo file')}</label>
-                            </div>
-                            <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
-                                <input type="checkbox" name="nfo_rename" id="nfo_rename" ${('', 'checked="checked"')[bool(sickbeard.NFO_RENAME)]}/>
-                                <label for="nfo_rename">${_('rename the original .nfo file to .nfo-orig to avoid conflicts?')}</label>
                             </div>
                         </div>
 
@@ -271,22 +272,36 @@
                                     <label class="component-title">${_('Unpack')}</label>
                                 </div>
                                 <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
+                                    <label for="unpack" class="component-desc">
+                                        ${_('What to do with archived releases found in your <i>TV Download Dir</i>?')}
+                                    </label>
+                                </div>
+
+                                <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <input id="unpack" class="enabler" type="checkbox" name="unpack"
-                                                ${('', 'checked="checked"')[bool(sickbeard.UNPACK)]} />
-                                            <label for="unpack">${_('unpack any TV releases in your <i>TV Download Dir</i>?')}</label>
+                                            <select name="unpack" id="unpack" class="form-control input-sm input350" title="unpack">
+                                                <option value="0" ${('', 'selected="selected"')[int(sickbeard.UNPACK) == 0]}>
+                                                    ${_('Ignore (do not process contents)')}
+                                                </option>
+                                                <option value="1" ${('', 'selected="selected"')[int(sickbeard.UNPACK) == 1]}>
+                                                    ${_('Unpack (process contents)')}
+                                                </option>
+                                                <option value="2" ${('', 'selected="selected"')[int(sickbeard.UNPACK) == 2]}>
+                                                    ${_('Treat as video (process archive as-is)')}
+                                                </option>
+                                            </select>
                                         </div>
                                     </div>
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <label><b>${_('note')}:</b>&nbsp;${_('only working with RAR archive')}</label>
+                                            <span><b>${_('note')}:</b>&nbsp;${_('\'Unpack\' only works with RAR archives')}</span>
                                         </div>
                                     </div>
                                     % if platform.system() in ('Windows', 'Microsoft'):
                                         <div class="row">
                                             <div class="col-md-12">
-                                                <label><b>${_('Windows')}:</b>&nbsp;${_('WinRar is required on windows')}</label>
+                                                <span><b>${_('Windows')}:</b>&nbsp;${_('WinRar is required on windows')}</span>
                                             </div>
                                         </div>
                                     % endif
@@ -390,6 +405,29 @@
                             </div>
                         </div>
 
+
+                        <div class="field-pair row">
+                            <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12">
+                                <label class="component-title">${_('Follow symbolic-links')}</label>
+                            </div>
+                            <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <input type="checkbox" name="processor_follow_symlinks" id="processor_follow_symlinks"
+                                            ${('', 'checked="checked"')[bool(sickbeard.PROCESSOR_FOLLOW_SYMLINKS)]}/>
+                                        <label for="processor_follow_symlinks">${_('follow down symbolic links in download directory?')}</label>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <label><b>${_('warning')}:</b>&nbsp;${_('<b>EXPERTS ONLY.</b><br>'
+                                                'Enable only if you know what <b>circular symbolic links</b> are,<br>'
+                                                'and can <b>verify that you have none</b>.')}</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="field-pair row">
                             <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12">
                                 <label class="component-title">${_('Use icacls')}</label>
@@ -475,7 +513,7 @@
                                 <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <input type="text" name="naming_pattern" id="naming_pattern" value="${sickbeard.NAMING_PATTERN}" class="form-control input-sm input350" autocapitalize="off"  title="naming_pattern"/>
+                                            <input type="text" name="naming_pattern" id="naming_pattern" value="${sickbeard.NAMING_PATTERN}" class="form-control input-sm input350" autocapitalize="off" title="naming_pattern"/>
                                             <span class="displayshow-icon-legend" id="show_naming_key" title="${_('Toggle Naming Legend')}" class="legend" />
                                         </div>
                                     </div>
@@ -660,7 +698,7 @@
                             </div>
                             <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                 <select id="naming_multi_ep" name="naming_multi_ep" class="form-control input-sm input350" title="naming_multi_ep">
-                                    % for cur_multi_ep in sorted(MULTI_EP_STRINGS.iteritems(), key=lambda x: x[1]):
+                                    % for cur_multi_ep in sorted(six.iteritems(MULTI_EP_STRINGS), key=lambda x: x[1]):
                                         <option value="${cur_multi_ep[0]}" ${('', 'selected="selected"')[cur_multi_ep[0] == sickbeard.NAMING_MULTI_EP]}>${cur_multi_ep[1]}</option>
                                     % endfor
                                 </select>
@@ -746,7 +784,8 @@
                                 <div class="field-pair row">
                                     <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12"></div>
                                     <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
-                                        <input type="text" name="naming_abd_pattern" id="naming_abd_pattern" value="${sickbeard.NAMING_ABD_PATTERN}" class="form-control input-sm input350" autocapitalize="off"  title="naming_adb_pattern"/>
+                                        <input type="text" name="naming_abd_pattern" id="naming_abd_pattern" value="${sickbeard.NAMING_ABD_PATTERN}"
+                                               class="form-control input-sm input350" autocapitalize="off" title="naming_abd_pattern"/>
                                         <span class="displayshow-icon-legend" id="show_naming_abd_key" title="${_('Toggle ABD Naming Legend')}" class="legend" />
                                     </div>
                                 </div>
@@ -930,7 +969,8 @@
                                 <div class="field-pair row">
                                     <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12"></div>
                                     <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
-                                        <input type="text" name="naming_sports_pattern" id="naming_sports_pattern" value="${sickbeard.NAMING_SPORTS_PATTERN}" class="form-control input-sm input350" autocapitalize="off" />
+                                        <input type="text" name="naming_sports_pattern" id="naming_sports_pattern" value="${sickbeard.NAMING_SPORTS_PATTERN}"
+                                               class="form-control input-sm input350" autocapitalize="off" title="naming_sports_pattern" />
                                         <span class="displayshow-icon-legend" id="show_naming_sports_key" title="${_('Toggle Sports Naming Legend')}" class="legend" />
                                     </div>
                                 </div>
@@ -1115,7 +1155,8 @@
                                 <div class="field-pair row">
                                     <div class="col-lg-3 col-md-3 col-sm-4 col-xs-12"></div>
                                     <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
-                                        <input type="text" name="naming_anime_pattern" id="naming_anime_pattern" value="${sickbeard.NAMING_ANIME_PATTERN}" class="form-control input-sm input350" autocapitalize="off" />
+                                        <input type="text" name="naming_anime_pattern" id="naming_anime_pattern" value="${sickbeard.NAMING_ANIME_PATTERN}"
+                                               class="form-control input-sm input350" autocapitalize="off" title="naming_anime_pattern" />
                                         <span class="displayshow-icon-legend" id="show_naming_anime_key" title="${_('Toggle Anime Naming Legend')}" class="legend"/>
                                     </div>
                                 </div>
@@ -1250,7 +1291,7 @@
                                 </div>
                                 <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                     <select id="naming_anime_multi_ep" name="naming_anime_multi_ep" class="form-control input-sm input350" title="naming_anime_multi_ep">
-                                        % for cur_multi_ep in sorted(MULTI_EP_STRINGS.iteritems(), key=lambda x: x[1]):
+                                        % for cur_multi_ep in sorted(six.iteritems(MULTI_EP_STRINGS), key=lambda x: x[1]):
                                             <option value="${cur_multi_ep[0]}" ${('', 'selected="selected" class="selected"')[cur_multi_ep[0] == sickbeard.NAMING_ANIME_MULTI_EP]}>${cur_multi_ep[1]}</option>
                                         % endfor
                                     </select>
@@ -1294,7 +1335,7 @@
                                     </div>
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <label>${_('only applies to animes. (eg. S15E45 - 310 vs S15E45)')}</label>
+                                            <label>${_('only applies to anime. (eg. S15E45 - 310 vs S15E45)')}</label>
                                         </div>
                                     </div>
                                 </div>
@@ -1313,7 +1354,7 @@
                                     </div>
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <label>${_('only applies to animes.')}</label>
+                                            <label>${_('only applies to anime.')}</label>
                                         </div>
                                     </div>
                                 </div>
@@ -1326,13 +1367,13 @@
                                 <div class="col-lg-9 col-md-9 col-sm-8 col-xs-12 pull-right component-desc">
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <input type="radio" name="naming_anime" id="naming_anime_none" value="3" ${('', 'checked="checked"')[sickbeard.NAMING_ANIME == 3]}/>
+                                            <input type="radio" name="naming_anime" id="naming_anime_none" value="3" ${('', 'checked="checked"')[sickbeard.NAMING_ANIME in (3, None)]}/>
                                             <label for="naming_anime_none">${_('don\'t include the absolute number')}</label>
                                         </div>
                                     </div>
                                     <div class="row">
                                         <div class="col-md-12">
-                                            <label>${_('only applies to animes.')}</label>
+                                            <label>${_('only applies to anime.')}</label>
                                         </div>
                                     </div>
                                 </div>
@@ -1367,7 +1408,7 @@
                                 <div class="row">
                                     <div class="col-md-12">
                                         <select id="metadataType" class="form-control input-sm input350">
-                                            % for (cur_name, cur_generator) in sorted(sickbeard.metadata_provider_dict.iteritems()):
+                                            % for (cur_name, cur_generator) in sorted(six.iteritems(sickbeard.metadata_provider_dict)):
                                                 <option value="${cur_generator.get_id()}">${cur_name}</option>
                                             % endfor
                                         </select>
@@ -1391,7 +1432,7 @@
                                 <label class="component-title">${_('Select Metadata')}</label>
                             </div>
                             <div class="col-lg-9 col-md-8 col-sm-7 col-xs-12 component-desc">
-                                % for (cur_name, cur_generator) in sickbeard.metadata_provider_dict.iteritems():
+                                % for (cur_name, cur_generator) in six.iteritems(sickbeard.metadata_provider_dict):
                                     <%
                                         cur_metadata_inst = sickbeard.metadata_provider_dict[cur_generator.name]
                                         cur_id = cur_generator.get_id()

@@ -11,8 +11,6 @@
 </%block>
 
 <%block name="scripts">
-    <script type="text/javascript" src="${srRoot}/js/qualityChooser.js?${sbPID}"></script>
-    <script type="text/javascript" src="${srRoot}/js/editShow.js"></script>
     % if show.is_anime:
         <script type="text/javascript" src="${srRoot}/js/blackwhite.js?${sbPID}"></script>
     % endif
@@ -139,18 +137,20 @@
                                         <span class="component-title">${_('Subtitles')}</span>
                                     </div>
                                     <div class="col-lg-9 col-md-8 col-sm-7 col-xs-12 component-desc">
-                                        <input type="checkbox" id="subtitles" name="subtitles" ${('', 'checked="checked"')[show.subtitles == 1 and sickbeard.USE_SUBTITLES is True]} ${('disabled="disabled"', '')[bool(sickbeard.USE_SUBTITLES)]}/>
+                                        <input type="checkbox" class="enabler" id="subtitles" name="subtitles" ${('', 'checked="checked"')[show.subtitles == 1 and sickbeard.USE_SUBTITLES is True]} ${('disabled="disabled"', '')[bool(sickbeard.USE_SUBTITLES)]}/>
                                         <label for="subtitles">${_('search for subtitles')}</label>
                                     </div>
-                                    % if show.subtitles:
+                                </div>
+                                <div id="content_subtitles">
+                                    <div class="field-pair row">
                                         <div class="col-lg-3 col-md-4 col-sm-5 col-xs-12">
                                             <span class="component-title">${_('Use SR Metdata')}</span>
                                         </div>
                                         <div class="col-lg-9 col-md-8 col-sm-7 col-xs-12 component-desc">
-                                        <input type="checkbox" id="subtitles_sr_metadata" name="subtitles_sr_metadata" ${('', 'checked="checked"')[show.subtitles_sr_metadata == 1 ]} />
-                                        <label for="subtitles_sr_metadata">${_('use SickRage metadata when searching for subtitle, this will override the autodiscovered metadata')}</label>
+                                            <input type="checkbox" id="subtitles_sr_metadata" name="subtitles_sr_metadata" ${('', 'checked="checked"')[show.subtitles_sr_metadata == 1 ]} />
+                                            <label for="subtitles_sr_metadata">${_('use SickRage metadata when searching for subtitle, this will override the autodiscovered metadata')}</label>
+                                        </div>
                                     </div>
-                                    % endif
                                 </div>
 
                                 <div class="field-pair row">
@@ -308,6 +308,7 @@
                                         <div class="row">
                                             <div class="col-md-12">
                                                 <label>${_('search results with one or more words from this list will be ignored.')}</label>
+                                                <label><b>${_('note')}:</b> ${_('this option overrides the globally ignored words!')}</label>
                                             </div>
                                         </div>
                                     </div>
@@ -328,12 +329,13 @@
                                         </div>
                                         <div class="row">
                                             <div class="col-md-12">
-                                                <label for="rls_require_words">comma-separated&nbsp;<i>${_('e.g. "word1,word2,word3"')}</i></label>
+                                                <label for="rls_require_words">${_('comma-separated <i>e.g. "word1,word2,word3</i>"')}</label>
                                             </div>
                                         </div>
                                         <div class="row">
                                             <div class="col-md-12">
                                                 <label>${_('search results with no words from this list will be ignored.')}</label>
+                                                <label><b>${_('note')}:</b> ${_('this option overrides the globally required words!')}</label>
                                             </div>
                                         </div>
                                     </div>
