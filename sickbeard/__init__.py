@@ -1929,6 +1929,7 @@ def save_config():  # pylint: disable=too-many-statements, too-many-branches
             'status_default': int(STATUS_DEFAULT),
             'status_default_after': int(STATUS_DEFAULT_AFTER),
             'season_folders_default': int(SEASON_FOLDERS_DEFAULT),
+            'stay_ahead_default': int(STAY_AHEAD_DEFAULT),
             'indexer_default': int(INDEXER_DEFAULT),
             'indexer_timeout': int(INDEXER_TIMEOUT),
             'anime_default': int(ANIME_DEFAULT),
