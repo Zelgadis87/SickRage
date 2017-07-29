@@ -785,8 +785,8 @@ class TraktChecker(object):
 
         sqlResults = myDB.select("SELECT season, episode FROM v_episodes_to_watch where indexer = ? and indexer_id = ? order by season asc, episode asc limit 1", [show.indexer, show.indexerid]);
         if len(sqlResults) == 1:
-            nextSeason = sqlResults[0]["season"];
-            nextEpisode = sqlResults[0]["episode"];
+            nextSeason = sqlResults[0][b'season'];
+            nextEpisode = sqlResults[0][b'episode'];
         else:
             nextSeason = -1;
             nextEpisode = -1;
@@ -797,4 +797,4 @@ class TraktChecker(object):
         if show.stay_ahead > 0:
             sqlResults = myDB.select("SELECT season, episode FROM tv_episodes WHERE status = ? and episode_id IN (select ep.episode_id from tv_episodes ep left join trakt_data trakt on (trakt.indexer = ep.indexer and trakt.indexer_id = ep.showid) where ep.indexer = ? and ep.showid = ? AND ep.season > 0 AND ((trakt.next_season IS NULL) OR (trakt.next_season > -1 AND ((ep.season > trakt.next_season) OR (ep.season = trakt.next_season AND ep.episode >= trakt.next_episode)))) order by ep.season ASC, ep.episode ASC limit ?)", [SKIPPED, show.indexer, show.indexerid, show.stay_ahead]);
             for row in sqlResults:
-                setEpisodeToWanted(show, row["season"], row["episode"])
+                setEpisodeToWanted(show, row[b'season'], row[b'episode'])
