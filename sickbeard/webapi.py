@@ -2037,6 +2037,7 @@ class CMDShowAddNew(ApiCall):
             "location": {"desc": "The path to the folder where the show should be created"},
             "archive": {"desc": "The archive quality of the show"},
             "season_folders": {"desc": "True to group episodes in season folders, False otherwise"},
+            "stay_ahead": {"desc": "The number of episodes to automatically download ahead of the last watched"},
             "status": {"desc": "The status of missing episodes"},
             "lang": {"desc": "The 2-letter language code of the desired show"},
             "subtitles": {"desc": "True to search for subtitles, False otherwise"},
@@ -2055,10 +2056,8 @@ class CMDShowAddNew(ApiCall):
             args, kwargs, "initial", None, False, "list", ALLOWED_QUALITY_LIST)
         self.archive, args = self.check_params(
             args, kwargs, "archive", None, False, "list", PREFERRED_QUALITY_LIST)
-        self.season_folders, args = self.check_params(args, kwargs, "flatten_folders",
-                                                      not bool(sickbeard.SEASON_FOLDERS_DEFAULT), False, "bool", [])
         self.season_folders, args = self.check_params(args, kwargs, "season_folders",
-                                                      self.season_folders, False, "bool", [])
+                                                      bool(sickbeard.SEASON_FOLDERS_DEFAULT), False, "bool", [])
         self.status, args = self.check_params(args, kwargs, "status", None, False, "string",
                                               ["wanted", "skipped", "ignored"])
         self.lang, args = self.check_params(args, kwargs, "lang", sickbeard.INDEXER_DEFAULT_LANGUAGE, False, "string",
@@ -2071,6 +2070,7 @@ class CMDShowAddNew(ApiCall):
                                              "bool", [])
         self.future_status, args = self.check_params(args, kwargs, "future_status", None, False, "string",
                                                      ["wanted", "skipped", "ignored"])
+        self.stay_ahead, args = self.check_params(args, kwargs, "stay_ahead", int(sickbeard.STAY_AHEAD_DEFAULT), False, "int", [])
 
     def run(self):
         """ Add a new show to SickRage """
@@ -2108,6 +2108,7 @@ class CMDShowAddNew(ApiCall):
             new_quality = Quality.combineQualities(i_quality_id, a_quality_id)
 
         # use default status as a fail-safe
+        
         new_status = sickbeard.STATUS_DEFAULT
         if self.status:
             # convert the string status to a int
@@ -2172,10 +2173,10 @@ class CMDShowAddNew(ApiCall):
                 helpers.chmodAsParent(show_path)
 
         sickbeard.showQueueScheduler.action.add_show(
-            int(indexer), int(self.indexerid), show_path, default_status=new_status,
+            int(indexer), int(self.indexerid), show_path, stay_ahead=self.stay_ahead, default_status=new_status,
             quality=new_quality, season_folders=int(self.season_folders),
             lang=self.lang, subtitles=self.subtitles, anime=self.anime,
-            scene=self.scene, default_status_after=default_ep_status_after
+            scene=self.scene, default_status_after=default_ep_status_after,
         )
 
         return _responds(RESULT_SUCCESS, {"name": indexer_name}, indexer_name + " has been queued to be added")
