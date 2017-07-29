@@ -3701,6 +3701,7 @@ var SICKRAGE = {
                     anyQualities: anyQualArray.join(','),
                     bestQualities: bestQualArray.join(','),
                     defaultSeasonFolders: $('#season_folders').prop('checked'),
+                    defaultStayAhead: $('#stay_ahead').val(),
                     subtitles: $('#subtitles').prop('checked'),
                     anime: $('#anime').prop('checked'),
                     scene: $('#scene').prop('checked'),
@@ -3710,7 +3711,7 @@ var SICKRAGE = {
                 $(this).attr('disabled', true);
             });
 
-            $('#statusSelect, #qualityPreset, #season_folders, #anyQualities, #bestQualities, #subtitles, #scene, #anime, #statusSelectAfter').change(function () {
+            $('#statusSelect, #qualityPreset, #season_folders, #stay_ahead, #anyQualities, #bestQualities, #subtitles, #scene, #anime, #statusSelectAfter').change(function () {
                 $('#saveDefaultsButton').attr('disabled', false);
             });
 

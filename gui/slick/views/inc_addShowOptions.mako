@@ -79,7 +79,7 @@
         </div>
         <div class="col-lg-9 col-md-8 col-sm-7 col-xs-12 component-desc">
             <input class="form-control form-control-inline input-sm" type="number" min="0" name="stay_ahead" id="stay_ahead" value="${sickbeard.STAY_AHEAD_DEFAULT}" style="width: 100px;" />
-            <label for="stay_ahead">${_('How many episodes to get ahead of the latest one?')}</label>
+            <label for="stay_ahead" style="line-height:40px">${_('How many episodes to get ahead of the last watched one?')}</label>
         </div>
     </div>
     <br>
