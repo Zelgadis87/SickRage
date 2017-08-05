@@ -27,63 +27,41 @@ import os
 import re
 import time
 import traceback
-try:
-    import json
-except ImportError:
-    import simplejson as json
-
-from requests.compat import urljoin
-import markdown2
-
-from mako.template import Template as MakoTemplate
-from mako.lookup import TemplateLookup
-from mako.exceptions import RichTraceback
-from mako.runtime import UNDEFINED
-
-from mimetypes import guess_type
-
-from operator import attrgetter
-
-from tornado.routes import route
-from tornado.web import RequestHandler, StaticFileHandler, HTTPError, authenticated
-from tornado.gen import coroutine
-from tornado.ioloop import IOLoop
-from tornado.process import cpu_count
-from tornado.concurrent import run_on_executor
-
 # noinspection PyCompatibility
 from concurrent.futures import ThreadPoolExecutor
+from mimetypes import guess_type
+from operator import attrgetter
 
-from dateutil import tz
 import adba
+import markdown2
+import sickbeard
+import six
+from dateutil import tz
 from libtrakt import TraktAPI
 from libtrakt.exceptions import traktException
-
-import sickbeard
-from sickbeard import config, sab, clients, notifiers, ui, logger, \
-    helpers, classes, db, search_queue, naming, subtitles as subtitle_module, \
-    network_timezones
-from sickbeard.providers import newznab, rsstorrent
-from sickbeard.common import Quality, Overview, statusStrings, cpu_presets, \
-    SNATCHED, UNAIRED, IGNORED, WANTED, FAILED, SKIPPED, NAMING_LIMITED_EXTEND_E_PREFIXED
-
+from mako.exceptions import RichTraceback
+from mako.lookup import TemplateLookup
+from mako.runtime import UNDEFINED
+from mako.template import Template as MakoTemplate
+from requests.compat import urljoin
+from sickbeard import classes, clients, config, db, helpers, logger, naming, network_timezones, notifiers, sab, search_queue, subtitles as subtitle_module, ui
 from sickbeard.blackandwhitelist import BlackAndWhiteList, short_group_names
 from sickbeard.browser import foldersAtPath
-from sickbeard.scene_numbering import get_scene_numbering, set_scene_numbering, get_scene_numbering_for_show, \
-    get_xem_numbering_for_show, get_scene_absolute_numbering_for_show, get_xem_absolute_numbering_for_show, \
-    get_scene_absolute_numbering
-
-from sickbeard.webapi import function_mapper
-from sickbeard.imdbPopular import imdb_popular
-from sickbeard.traktTrending import trakt_trending
+from sickbeard.common import (cpu_presets, FAILED, IGNORED, NAMING_LIMITED_EXTEND_E_PREFIXED, Overview, Quality, SKIPPED, SNATCHED, statusStrings, UNAIRED,
+                              WANTED)
 from sickbeard.helpers import get_showname_from_indexer
+from sickbeard.imdbPopular import imdb_popular
+from sickbeard.providers import newznab, rsstorrent
+from sickbeard.scene_numbering import (get_scene_absolute_numbering, get_scene_absolute_numbering_for_show, get_scene_numbering, get_scene_numbering_for_show,
+                                       get_xem_absolute_numbering_for_show, get_xem_numbering_for_show, set_scene_numbering)
+from sickbeard.traktTrending import trakt_trending
 from sickbeard.versionChecker import CheckVersion
-
-from sickrage.helper import setup_github, episode_num, try_int, sanitize_filename
+from sickbeard.webapi import function_mapper
+from sickrage.helper import episode_num, sanitize_filename, setup_github, try_int
 from sickrage.helper.common import pretty_file_size
 from sickrage.helper.encoding import ek, ss
-from sickrage.helper.exceptions import CantRefreshShowException, CantUpdateShowException, ex
-from sickrage.helper.exceptions import MultipleShowObjectsException, NoNFOException, ShowDirectoryNotFoundException
+from sickrage.helper.exceptions import (CantRefreshShowException, CantUpdateShowException, ex, MultipleShowObjectsException, NoNFOException,
+                                        ShowDirectoryNotFoundException)
 from sickrage.media.ShowBanner import ShowBanner
 from sickrage.media.ShowFanArt import ShowFanArt
 from sickrage.media.ShowNetworkLogo import ShowNetworkLogo
@@ -94,13 +72,21 @@ from sickrage.show.History import History as HistoryTool
 from sickrage.show.Show import Show
 from sickrage.system.Restart import Restart
 from sickrage.system.Shutdown import Shutdown
-
-import six
-
 # noinspection PyUnresolvedReferences
 from six.moves import urllib
 # noinspection PyUnresolvedReferences
 from six.moves.urllib.parse import unquote_plus
+from tornado.concurrent import run_on_executor
+from tornado.gen import coroutine
+from tornado.ioloop import IOLoop
+from tornado.process import cpu_count
+from tornado.routes import route
+from tornado.web import authenticated, HTTPError, RequestHandler, StaticFileHandler
+
+try:
+    import json
+except ImportError:
+    import simplejson as json
 
 
 mako_lookup = {}
@@ -474,6 +460,13 @@ class WebRoot(WebHandler):
 
         return self.redirect("/schedule/")
 
+
+    def toggleScheduleDisplaySnatched(self):
+
+        sickbeard.COMING_EPS_DISPLAY_SNATCHED = not sickbeard.COMING_EPS_DISPLAY_SNATCHED
+
+        return self.redirect("/schedule/")
+
     def setScheduleSort(self, sort):
         if sort not in ('date', 'network', 'show') or sickbeard.COMING_EPS_LAYOUT == 'calendar':
             sort = 'date'
@@ -625,14 +618,15 @@ class UI(WebRoot):
 
         return json.dumps(messages)
 
-    def set_site_message(self, message, level):
+    def set_site_message(self, message, tag, level):
         self.set_header('Cache-Control', 'max-age=0,no-cache,no-store')
         if message:
-            helpers.add_site_message(message, level)
+            helpers.add_site_message(message, tag=tag, level=level)
         else:
             if sickbeard.BRANCH and sickbeard.BRANCH != 'master' and not sickbeard.DEVELOPER and self.get_current_user():
-                message = _('You\'re using the {branch} branch. Please use \'master\' unless specifically asked').format(branch=sickbeard.BRANCH)
-                helpers.add_site_message(message, 'danger')
+                message = _('You\'re using the {branch} branch. '
+                            'Please use \'master\' unless specifically asked').format(branch=sickbeard.BRANCH)
+                helpers.add_site_message(message, tag='not_using_master_branch', level='danger')
 
         return sickbeard.SITE_MESSAGES
 
@@ -3947,10 +3941,10 @@ class ConfigGeneral(Config):
         if gui_language != sickbeard.GUI_LANG:
             if gui_language:
                 # Selected language
-                gettext.translation('messages', sickbeard.LOCALE_DIR, languages=[gui_language], codeset='UTF-8').install(unicode=1)
+                gettext.translation('messages', sickbeard.LOCALE_DIR, languages=[gui_language], codeset='UTF-8').install(unicode=1, names=["ngettext"])
             else:
                 # System default language
-                gettext.install('messages', sickbeard.LOCALE_DIR, unicode=1, codeset='UTF-8')
+                gettext.install('messages', sickbeard.LOCALE_DIR, unicode=1, codeset='UTF-8', names=["ngettext"])
 
             sickbeard.GUI_LANG = gui_language
 
@@ -5193,7 +5187,7 @@ class ConfigSubtitles(Config):
             service_order=None, subtitles_history=None, subtitles_finder_frequency=None,
             subtitles_multi=None, embedded_subtitles_all=None, subtitles_extra_scripts=None, subtitles_hearing_impaired=None,
             addic7ed_user=None, addic7ed_pass=None, itasa_user=None, itasa_pass=None, legendastv_user=None, legendastv_pass=None,
-            opensubtitles_user=None, opensubtitles_pass=None, subtitles_download_in_pp=None, subtitles_keep_only_wanted=None):
+            opensubtitles_user=None, opensubtitles_pass=None, subscenter_user=None, subscenter_pass=None, subtitles_download_in_pp=None, subtitles_keep_only_wanted=None):
 
         config.change_subtitle_finder_frequency(subtitles_finder_frequency)
         config.change_use_subtitles(use_subtitles)
@@ -5230,6 +5224,8 @@ class ConfigSubtitles(Config):
         sickbeard.LEGENDASTV_PASS = legendastv_pass or ''
         sickbeard.OPENSUBTITLES_USER = opensubtitles_user or ''
         sickbeard.OPENSUBTITLES_PASS = opensubtitles_pass or ''
+        sickbeard.SUBSCENTER_USER = subscenter_user or ''
+        sickbeard.SUBSCENTER_PASS = subscenter_pass or ''
 
         sickbeard.save_config()
         # Reset provider pool so next time we use the newest settings
