@@ -8,12 +8,12 @@
     from sickbeard.helpers import anon_url
     from sickbeard import sbdatetime
     from sickbeard.common import Quality
-    
+
     SNATCHED = Quality.SNATCHED + Quality.SNATCHED_PROPER + Quality.SNATCHED_BEST  # type = list
 %>
 <%block name="scripts">
-    <script type="text/javascript" src="${srRoot}/js/ajaxEpSearch.js?${sbPID}"></script>
-    <script type="text/javascript" src="${srRoot}/js/plotTooltip.js?${sbPID}"></script>
+    <script type="text/javascript" src="${static_url('js/ajaxEpSearch.js')}"></script>
+    <script type="text/javascript" src="${static_url('js/plotTooltip.js')}"></script>
 </%block>
 
 <%block name="content">
@@ -24,7 +24,9 @@
                 % if 'calendar' != layout:
                     <b>${_('Key')}:</b>
                     <span class="listing-key listing-overdue">${_('Missed')}</span>
-                    <span class="listing-key listing-snatched">${_('Snatched')}</span>
+                    % if sickbeard.COMING_EPS_DISPLAY_SNATCHED:
+                        <span class="listing-key listing-snatched">${_('Snatched')}</span>
+                    % endif
                     <span class="listing-key listing-current">${_('Today')}</span>
                     <span class="listing-key listing-default">${_('Soon')}</span>
                     <span class="listing-key listing-toofar">${_('Later')}</span>
@@ -66,7 +68,16 @@
                     </select>
                     &nbsp;
                 </label>
-
+                % if layout != 'calendar':
+                <label>
+                    <span>${_('View Snatched')}:</span>
+                    <select name="viewsnatched" class="form-control form-control-inline input-sm" onchange="location = this.options[this.selectedIndex].value;" title="View snatched">
+                        <option value="${srRoot}/toggleScheduleDisplaySnatched" ${('', 'selected="selected"')[not bool(sickbeard.COMING_EPS_DISPLAY_SNATCHED)]}>${_('Hidden')}</option>
+                        <option value="${srRoot}/toggleScheduleDisplaySnatched" ${('', 'selected="selected"')[bool(sickbeard.COMING_EPS_DISPLAY_SNATCHED)]}>${_('Shown')}</option>
+                    </select>
+                    &nbsp;
+                </label>
+                % endif
                 <label>
                     <span>${_('Layout')}:</span>
                     <select name="layout" class="form-control form-control-inline input-sm" onchange="location = this.options[this.selectedIndex].value;" title="Layout">
@@ -116,6 +127,9 @@
                                     if int(cur_result[b'paused']) and not sickbeard.COMING_EPS_DISPLAY_PAUSED:
                                         continue
 
+                                    if snatched_status and not sickbeard.COMING_EPS_DISPLAY_SNATCHED:
+                                        continue
+
                                     cur_ep_airdate = cur_result[b'localtime'].date()
                                     cur_ep_enddate = cur_result[b'localtime']
                                     if run_time:
@@ -158,10 +172,10 @@
                                     </td>
                                     <td>
                                         % if cur_result[b'description']:
-                                            <img alt="" src="${srRoot}/images/info32.png" height="16" width="16" class="plotInfo"
+                                            <img alt="" src="${static_url('images/info32.png')}" height="16" width="16" class="plotInfo"
                                                  id="plot_info_${'%s_%s_%s' % (cur_result[b'showid'], cur_result[b'season'], cur_result[b'episode'])}"/>
                                         % else:
-                                            <img alt="" src="${srRoot}/images/info32.png" width="16" height="16" class="plotInfoNone"/>
+                                            <img alt="" src="${static_url('images/info32.png')}" width="16" height="16" class="plotInfoNone"/>
                                         % endif
                                         ${cur_result[b'name']}
                                     </td>
@@ -186,7 +200,7 @@
                                            rel="noreferrer" onclick="window.open(this.href, '_blank'); return false"
                                            title="${sickbeard.indexerApi(cur_indexer).config['show_url']}${cur_result[b'showid']}">
                                             <img alt="${sickbeard.indexerApi(cur_indexer).name}" height="16" width="16"
-                                                 src="${srRoot}/images/indexers/${sickbeard.indexerApi(cur_indexer).config['icon']}"/>
+                                                 src="${static_url('images/indexers/' + sickbeard.indexerApi(cur_indexer).config['icon'])}"/>
                                         </a>
                                     </td>
                                     <td align="center">
@@ -303,7 +317,7 @@
                     if int(cur_result[b'paused']) and not sickbeard.COMING_EPS_DISPLAY_PAUSED:
                         continue
 
-                    if cur_result[b'location'] and snatched_status:
+                    if snatched_status and (cur_result[b'location'] or not sickbeard.COMING_EPS_DISPLAY_SNATCHED):
                         continue
 
                     run_time = cur_result[b'runtime']
@@ -425,7 +439,7 @@
                                                rel="noreferrer" onclick="window.open(this.href, '_blank'); return false"
                                                title="${sickbeard.indexerApi(cur_indexer).config['show_url']}"><img
                                                     alt="${sickbeard.indexerApi(cur_indexer).name}" height="16" width="16"
-                                                    src="${srRoot}/images/indexers/${sickbeard.indexerApi(cur_indexer).config['icon']}"/>
+                                                    src="${static_url('images/indexers/' + sickbeard.indexerApi(cur_indexer).config['icon'])}"/>
                                             </a>
                                             <span>
                                                 <a href="${srRoot}/home/searchEpisode?show=${cur_result[b'showid']}&amp;season=${cur_result[b'season']}&amp;episode=${cur_result[b'episode']}"
@@ -462,12 +476,12 @@
                                         <div>
                                             % if cur_result[b'description']:
                                                 <span class="title" style="vertical-align:middle;">${_('Plot')}:</span>
-                                                <img class="ep_summaryTrigger" src="${srRoot}/images/plus.png" height="16" width="16" alt=""
+                                                <img class="ep_summaryTrigger" src="${static_url('images/plus.png')}" height="16" width="16" alt=""
                                                      title="Toggle Summary"/>
                                                 <div class="ep_summary">${cur_result[b'description']}</div>
                                             % else:
                                                 <span class="title ep_summaryTriggerNone" style="vertical-align:middle;">${_('Plot')}:</span>
-                                                <img class="ep_summaryTriggerNone" src="${srRoot}/images/plus.png" height="16" width="16"
+                                                <img class="ep_summaryTriggerNone" src="${static_url('images/plus.png')}" height="16" width="16"
                                                      alt=""/>
                                             % endif
                                         </div>
