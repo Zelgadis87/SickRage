@@ -23,7 +23,6 @@ import os
 import traceback
 from collections import namedtuple
 
-import sickbeard
 import six
 from imdb import _exceptions as imdb_exceptions
 from libtrakt import TraktAPI

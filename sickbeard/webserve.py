@@ -34,9 +34,9 @@ from operator import attrgetter
 
 import adba
 import markdown2
-import sickbeard
 import six
 from dateutil import tz
+from github.GithubException import GithubException
 from libtrakt import TraktAPI
 from libtrakt.exceptions import traktException
 from mako.exceptions import RichTraceback
@@ -44,6 +44,18 @@ from mako.lookup import TemplateLookup
 from mako.runtime import UNDEFINED
 from mako.template import Template as MakoTemplate
 from requests.compat import urljoin
+# noinspection PyUnresolvedReferences
+from six.moves import urllib
+# noinspection PyUnresolvedReferences
+from six.moves.urllib.parse import unquote_plus
+from tornado.concurrent import run_on_executor
+from tornado.gen import coroutine
+from tornado.ioloop import IOLoop
+from tornado.process import cpu_count
+from tornado.routes import route
+from tornado.web import addslash, authenticated, HTTPError, RequestHandler, StaticFileHandler
+
+import sickbeard
 from sickbeard import classes, clients, config, db, helpers, logger, naming, network_timezones, notifiers, sab, search_queue, subtitles as subtitle_module, ui
 from sickbeard.blackandwhitelist import BlackAndWhiteList, short_group_names
 from sickbeard.browser import foldersAtPath
@@ -72,16 +84,6 @@ from sickrage.show.History import History as HistoryTool
 from sickrage.show.Show import Show
 from sickrage.system.Restart import Restart
 from sickrage.system.Shutdown import Shutdown
-# noinspection PyUnresolvedReferences
-from six.moves import urllib
-# noinspection PyUnresolvedReferences
-from six.moves.urllib.parse import unquote_plus
-from tornado.concurrent import run_on_executor
-from tornado.gen import coroutine
-from tornado.ioloop import IOLoop
-from tornado.process import cpu_count
-from tornado.routes import route
-from tornado.web import authenticated, HTTPError, RequestHandler, StaticFileHandler
 
 try:
     import json
@@ -118,6 +120,7 @@ class PageTemplate(MakoTemplate):
         self.arguments['sbDefaultPage'] = sickbeard.DEFAULT_PAGE
         self.arguments['srLogin'] = rh.get_current_user()
         self.arguments['sbStartTime'] = rh.startTime
+        self.arguments['static_url'] = rh.static_url
 
         if rh.request.headers['Host'][0] == '[':
             self.arguments['sbHost'] = re.match(r"^\[.*\]", rh.request.headers['Host'], re.X | re.M | re.S).group(0)
@@ -130,7 +133,7 @@ class PageTemplate(MakoTemplate):
             sbHttpPort = rh.request.headers['X-Forwarded-Port']
             self.arguments['sbHttpsPort'] = sbHttpPort
         if "X-Forwarded-Proto" in rh.request.headers:
-            self.arguments['sbHttpsEnabled'] = True if rh.request.headers['X-Forwarded-Proto'] == 'https' else False
+            self.arguments['sbHttpsEnabled'] = rh.request.headers['X-Forwarded-Proto'].lower() == 'https'
 
         self.arguments['numErrors'] = len(classes.ErrorViewer.errors)
         self.arguments['numWarnings'] = len(classes.WarningViewer.errors)
@@ -167,6 +170,7 @@ class BaseHandler(RequestHandler):
         self.startTime = time.time()
 
         super(BaseHandler, self).__init__(*args, **kwargs)
+        self.include_host = True
 
     # def set_default_headers(self):
     #     self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -608,13 +612,15 @@ class UI(WebRoot):
     def get_messages(self):
         self.set_header('Cache-Control', 'max-age=0,no-cache,no-store')
         self.set_header('Content-Type', 'application/json')
+        notifications = ui.notifications.get_notifications(self.request.remote_ip)
         messages = {}
-        cur_notification_num = 1
-        for cur_notification in ui.notifications.get_notifications(self.request.remote_ip):
-            messages['notification-' + str(cur_notification_num)] = {'title': cur_notification.title,
-                                                                     'message': cur_notification.message,
-                                                                     'type': cur_notification.type}
-            cur_notification_num += 1
+        for index, cur_notification in enumerate(notifications, 1):
+            messages['notification-' + str(index)] = {
+                'hash': hash(cur_notification),
+                'title': cur_notification.title,
+                'message': cur_notification.message,
+                'type': cur_notification.type
+            }
 
         return json.dumps(messages)
 
@@ -1295,6 +1301,29 @@ class Home(WebRoot):
                                             _("Update wasn't successful, not restarting. Check your log for more information."))
         else:
             return self.redirect('/' + sickbeard.DEFAULT_PAGE + '/')
+
+    @staticmethod
+    def fetchRemoteBranches():
+        response = []
+        try:
+            gh_branches = sickbeard.versionCheckScheduler.action.list_remote_branches()
+        except GithubException:
+            gh_branches = None
+
+        if gh_branches:
+            gh_credentials = (sickbeard.GIT_AUTH_TYPE == 0 and sickbeard.GIT_USERNAME and sickbeard.GIT_PASSWORD or
+                              sickbeard.GIT_AUTH_TYPE == 1 and sickbeard.GIT_TOKEN)
+            for cur_branch in gh_branches:
+                branch_obj = {'name': cur_branch}
+                if cur_branch == sickbeard.BRANCH:
+                    branch_obj['current'] = True
+
+                if (gh_credentials and sickbeard.DEVELOPER == 1 or
+                    gh_credentials and cur_branch in ['master', 'develop'] or
+                    cur_branch == 'master'):
+                    response.append(branch_obj)
+
+        return json.dumps(response)
 
     def branchCheckout(self, branch):
         if sickbeard.BRANCH != branch:
@@ -2404,6 +2433,7 @@ class HomePostProcess(Home):
     def __init__(self, *args, **kwargs):
         super(HomePostProcess, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="home_postprocess.mako")
         return t.render(title=_('Post Processing'), header=_('Post Processing'), topmenu='home', controller="home", action="postProcess")
@@ -2494,7 +2524,7 @@ class HomeAddShows(Home):
 
         for i, shows in six.iteritems(results):
             final_results.extend({(sickbeard.indexerApi(i).name, i, sickbeard.indexerApi(i).config["show_url"], int(show['id']),
-                                   show['seriesname'], show['firstaired']) for show in shows})
+                                   show['seriesname'], show['firstaired'], show['in_show_list']) for show in shows})
 
         lang_id = sickbeard.indexerApi().config['langabbv_to_id'][lang]
         return json.dumps({'results': final_results, 'langid': lang_id})
@@ -3791,6 +3821,7 @@ class Config(WebRoot):
 
         return menu
 
+    @addslash
     def index(self):
         t = PageTemplate(rh=self, filename="config.mako")
 
@@ -3836,6 +3867,7 @@ class ConfigShares(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigShares, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self):
 
         t = PageTemplate(rh=self, filename="config_shares.mako")
@@ -3874,6 +3906,7 @@ class ConfigGeneral(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigGeneral, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self):
         t = PageTemplate(rh=self, filename="config_general.mako")
 
@@ -4071,6 +4104,7 @@ class ConfigBackupRestore(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigBackupRestore, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="config_backuprestore.mako")
 
@@ -4134,6 +4168,7 @@ class ConfigSearch(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigSearch, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="config_search.mako")
 
@@ -4271,6 +4306,7 @@ class ConfigPostProcessing(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigPostProcessing, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="config_postProcessing.mako")
 
@@ -4448,6 +4484,7 @@ class ConfigProviders(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigProviders, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="config_providers.mako")
 
@@ -4894,6 +4931,7 @@ class ConfigNotifications(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigNotifications, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="config_notifications.mako")
 
@@ -5175,6 +5213,7 @@ class ConfigSubtitles(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigSubtitles, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
         t = PageTemplate(rh=self, filename="config_subtitles.mako")
 
@@ -5241,6 +5280,7 @@ class ConfigAnime(Config):
     def __init__(self, *args, **kwargs):
         super(ConfigAnime, self).__init__(*args, **kwargs)
 
+    @addslash
     def index(self, *args_, **kwargs_):
 
         t = PageTemplate(rh=self, filename="config_anime.mako")
@@ -5296,6 +5336,7 @@ class ErrorLogs(WebRoot):
 
         return menu
 
+    @addslash
     def index(self, level=logger.ERROR):  # pylint: disable=arguments-differ
         level = try_int(level, logger.ERROR)
 

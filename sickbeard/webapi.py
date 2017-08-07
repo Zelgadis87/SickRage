@@ -31,8 +31,12 @@ import re
 import time
 import traceback
 
-import sickbeard
 import six
+# noinspection PyUnresolvedReferences
+from six.moves import urllib
+from tornado.web import RequestHandler
+
+import sickbeard
 from sickbeard import classes, db, helpers, image_cache, logger, network_timezones, sbdatetime, search_queue, ui
 from sickbeard.common import (ARCHIVED, DOWNLOADED, FAILED, IGNORED, Overview, Quality, SKIPPED, SNATCHED, SNATCHED_PROPER, statusStrings, UNAIRED, UNKNOWN,
                               WANTED)
@@ -51,10 +55,6 @@ from sickrage.show.History import History
 from sickrage.show.Show import Show
 from sickrage.system.Restart import Restart
 from sickrage.system.Shutdown import Shutdown
-# noinspection PyUnresolvedReferences
-from six.moves import urllib
-# pylint: disable=import-error
-from tornado.web import RequestHandler
 
 try:
     import json
@@ -1628,8 +1628,8 @@ class CMDSickBeardSearchIndexers(ApiCall):
         "optionalParameters": {
             "name": {"desc": "The name of the show you want to search for"},
             "indexerid": {"desc": "Unique ID of a show"},
-            "tvdbid": {"desc": "thetvdb.com unique ID of a show"},
             "lang": {"desc": "The 2-letter language code of the desired show"},
+            "only_new": {"desc": "Discard shows that are already in your show list"},
         }
     }
 
@@ -1640,6 +1640,7 @@ class CMDSickBeardSearchIndexers(ApiCall):
         self.lang, args = self.check_params(args, kwargs, "lang", sickbeard.INDEXER_DEFAULT_LANGUAGE, False, "string",
                                             self.valid_languages.keys())
         self.indexerid, args = self.check_params(args, kwargs, "indexerid", None, False, "int", [])
+        self.only_new, args = self.check_params(args, kwargs, "only_new", True, False, "bool", [])
 
     def run(self):
         """ Search for a show with a given name on all the indexers, in a specific language """
@@ -1665,10 +1666,14 @@ class CMDSickBeardSearchIndexers(ApiCall):
                     continue
 
                 for curSeries in api_data:
+                    # Skip it if it's in our show list already, and we only want new shows
+                    if curSeries['in_show_list'] and self.only_new:
+                        continue
                     results.append({indexer_ids[_indexer]: int(curSeries['id']),
                                     "name": curSeries['seriesname'],
                                     "first_aired": curSeries['firstaired'],
-                                    "indexer": int(_indexer)})
+                                    "indexer": int(_indexer),
+                                    "in_show_list": curSeries['in_show_list']})
 
             return _responds(RESULT_SUCCESS, {"results": results, "langid": lang_id})
 
