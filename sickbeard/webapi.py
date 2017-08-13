@@ -1970,10 +1970,8 @@ class CMDShowAddExisting(ApiCall):
 
         self.initial, args = self.check_params(args, kwargs, "initial", [], False, "list", ALLOWED_QUALITY_LIST)
         self.archive, args = self.check_params(args, kwargs, "archive", [], False, "list", PREFERRED_QUALITY_LIST)
-        self.season_folders, args = self.check_params(args, kwargs, "flatten_folders",
-                                                      not bool(sickbeard.SEASON_FOLDERS_DEFAULT), False, "bool", [])
         self.season_folders, args = self.check_params(args, kwargs, "season_folders",
-                                                      self.season_folders, False, "bool", [])
+                                                      bool(sickbeard.SEASON_FOLDERS_DEFAULT), False, "bool", [])
         self.subtitles, args = self.check_params(args, kwargs, "subtitles", int(sickbeard.USE_SUBTITLES),
                                                  False, "int", [])
 

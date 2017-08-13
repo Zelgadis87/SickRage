@@ -45,6 +45,8 @@
                     <select id="postersort" class="form-control form-control-inline input-sm" title="Poster Sort">
                         <option value="name" data-sort="${srRoot}/setPosterSortBy/?sort=name" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'name']}>${_('Name')}</option>
                         <option value="date" data-sort="${srRoot}/setPosterSortBy/?sort=date" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'date']}>${_('Next Episode')}</option>
+                        <option value="added" data-sort="${srRoot}/setPosterSortBy/?sort=added" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'added']}>Added date</option>
+                        <option value="lastseen" data-sort="${srRoot}/setPosterSortBy/?sort=lastseen" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'lastseen']}>Last seen</option>
                         <option value="network" data-sort="${srRoot}/setPosterSortBy/?sort=network" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'network']}>${_('Network')}</option>
                         <option value="progress" data-sort="${srRoot}/setPosterSortBy/?sort=progress" ${('', 'selected="selected"')[sickbeard.POSTER_SORTBY == 'progress']}>${_('Progress')}</option>
                     </select>
