@@ -19,7 +19,7 @@
         <div class="posterview">
             % for curLoadingShow in sickbeard.showQueueScheduler.action.loading_show_list:
                 <% loading_show = curLoadingShow.info %>
-                <div class="show-container" data-name="${loading_show.sort_name}" data-date="1" data-network="0" data-progress="0">
+                <div class="show-container" data-name="${loading_show.sort_name}" data-date="1" data-network="0" data-progress="0" data-added="9000000000000000" data-lastseen="0">
                     <div class="show-image">
                         <img alt="" title="${loading_show.name}" class="show-image" style="border-bottom: 1px solid #111;" src="" data-src="${srRoot}/showPoster/?show=${loading_show.id | u}&amp;which=poster_thumb" />
                     </div>
@@ -98,7 +98,7 @@
                         elif display_status == 'Ended':
                             data_date = '5000000100.0'
                 %>
-                <div class="show-container" id="show${curShow.indexerid}" data-name="${curShow.sort_name}" data-date="${data_date}" data-network="${curShow.network}" data-progress="${progressbar_percent}">
+                <div class="show-container" id="show${curShow.indexerid}" data-name="${curShow.sort_name}" data-date="${data_date}" data-network="${curShow.network}" data-progress="${progressbar_percent}" data-added="${curShow.added_date}" data-lastseen="${curShow.last_seen}">
                     <div class="show-image">
                         <a href="${srRoot}/home/displayShow?show=${curShow.indexerid}"><img alt="" class="show-image" src="" data-src="${srRoot}/showPoster/?show=${curShow.indexerid}&amp;which=poster_thumb" /></a>
                     </div>
