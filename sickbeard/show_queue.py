@@ -29,6 +29,7 @@ from libtrakt import TraktAPI
 
 import time
 
+import sickbeard
 from sickbeard import generic_queue, logger, name_cache, notifiers, ui
 from sickbeard.blackandwhitelist import BlackAndWhiteList
 from sickbeard.common import WANTED
